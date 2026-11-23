@@ -9,10 +9,20 @@ OUT="MiBypassCharge-${VER}.zip"
 [ -f "$OUT" ] && rm -f "$OUT"
 
 python - "$OUT" "$VER" <<'PY'
-import os, sys, zipfile, hashlib
+import os, re, sys, zipfile, hashlib
 out = sys.argv[1]
 ver = sys.argv[2]
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'module')
+
+# 版本号唯一来源是 module/module.prop：同步写进 WebUI 底部那行注入值
+_idx = os.path.join(root, 'webroot', 'index.html')
+if os.path.exists(_idx):
+    _txt = open(_idx, encoding='utf-8').read()
+    _new = re.sub(r'window\.__BG_VER__ = "[^"]*"',
+                  'window.__BG_VER__ = "%s"' % ver.lstrip('v'), _txt)
+    if _new != _txt:
+        open(_idx, 'w', encoding='utf-8').write(_new)
+        print('WebUI 版本 ->', ver.lstrip('v'))
 README = """MiBypassCharge — 旁路供电守护 (K70)
 版本: %s
 

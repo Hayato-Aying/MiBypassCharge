@@ -37,6 +37,15 @@ rm -rf "$ASSETS"; mkdir -p "$ASSETS/webroot"
 cp -a "$ROOT/module/webroot/." "$ASSETS/webroot/"
 rm -f "$ASSETS/webroot/MiBypassChargeTile.apk"
 
+# 界面底部的版本号也来自 module.prop（index.html 里那行注入值，缺了就会一直显示 1.0）
+VER_PLAIN=${VER#v}
+if [ -n "$VER_PLAIN" ]; then
+  sed -i "s|window.__BG_VER__ = \"[^\"]*\"|window.__BG_VER__ = \"$VER_PLAIN\"|" \
+    "$ASSETS/webroot/index.html" "$ROOT/module/webroot/index.html"
+  grep -q "window.__BG_VER__ = \"$VER_PLAIN\"" "$ASSETS/webroot/index.html" \
+    || { echo "!! index.html 版本写入失败"; exit 1; }
+fi
+
 aapt2 compile --dir app/src/main/res -o "$OUT/res"
 aapt2 link -o "$OUT/base.apk" -I "$ANDROID_JAR" \
   --manifest app/src/main/AndroidManifest.xml \
