@@ -17,7 +17,18 @@ KS_PASS=${KS_PASS:-android}
 OUT=$ROOT/tile/build
 
 cd "$ROOT/tile"
-rm -rf "$OUT"; mkdir -p "$OUT/res" "$OUT/classes" "$OUT/dex"
+rm -rf "$OUT"; mkdir -p "$OUT/res" "$OUT/classes" "$OUT/dex" "$OUT/src"
+
+# 版本号的唯一来源是 module/module.prop：同时写进 manifest 和 BuildConfigBridge，
+# 免得 App 里显示的版本和模块版本对不上（以前这里漏了，界面上永远显示 1.0）。
+VER=$(sed -n 's/^version=//p' "$ROOT/module/module.prop" 2>/dev/null | head -1)
+VCODE=$(sed -n 's/^versionCode=//p' "$ROOT/module/module.prop" 2>/dev/null | head -1)
+cp -a app/src/main/java/. "$OUT/src/"
+if [ -n "$VER" ]; then
+  BC="$OUT/src/com/changxyz/mibypasscharge/tile/BuildConfigBridge.java"
+  sed -i "s|static final String VERSION = \".*\";|static final String VERSION = \"$VER\";|" "$BC"
+  grep -q "VERSION = \"$VER\"" "$BC" || { echo "!! BuildConfigBridge 版本写入失败"; exit 1; }
+fi
 
 # 模块 WebUI 打进 APK assets：App 用 file:///android_asset/webroot/index.html 加载。
 # 用内嵌副本而不是读 /data/adb —— 那是 0700 root-only，App 的 uid 进不去。
@@ -30,10 +41,11 @@ aapt2 compile --dir app/src/main/res -o "$OUT/res"
 aapt2 link -o "$OUT/base.apk" -I "$ANDROID_JAR" \
   --manifest app/src/main/AndroidManifest.xml \
   -A "$ASSETS" \
+  ${VCODE:+--version-code "$VCODE"} ${VER:+--version-name "$VER"} \
   --min-sdk-version 24 --target-sdk-version 34 "$OUT"/res/*.flat
 
 javac -source 17 -target 17 -Xlint:-options -encoding UTF-8 \
-  -classpath "$ANDROID_JAR" -d "$OUT/classes" $(find app/src/main/java -name '*.java')
+  -classpath "$ANDROID_JAR" -d "$OUT/classes" $(find "$OUT/src" -name '*.java')
 
 java -cp "$D8_JAR" com.android.tools.r8.D8 --min-api 24 --output "$OUT/dex" \
   $(find "$OUT/classes" -name '*.class')
@@ -52,4 +64,5 @@ apksigner sign --ks "$KS" --ks-pass "pass:$KS_PASS" --key-pass "pass:$KS_PASS" \
   --out "$OUT/MiBypassChargeTile.apk" "$OUT/aligned.apk"
 
 cp "$OUT/MiBypassChargeTile.apk" "$ROOT/module/webroot/MiBypassChargeTile.apk"
+echo "版本: ${VER:-<manifest>} (${VCODE:-?})"
 ls -l "$OUT/MiBypassChargeTile.apk"
