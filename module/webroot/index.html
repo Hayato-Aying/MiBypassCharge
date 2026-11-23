@@ -237,6 +237,17 @@ window.__BG_VER__ = "1.8.0-fork.1";
   }
 
   /* ---------------- 渲染 ---------------- */
+  /* 输入框只在没人正在编辑时回写值。
+     刷新定时器每 3 秒跑一次 render/loadConf，原来不管焦点直接写 lowNum.value，
+     用户手动打到一半（还没按回车/松手）就被配置旧值冲掉，表现就是「手动输入失败，
+     只有 ± 按钮能用」。 */
+  function setVal(id, val) {
+    var el = $(id);
+    if (!el) return;
+    if (document.activeElement === el) return;
+    el.value = val;
+  }
+
   function render() {
     /* 乐观值优先：用户刚点的配置立刻生效于界面，不被 3 秒定时刷新的旧 state 覆盖 */
     var vconf = {};
@@ -342,7 +353,7 @@ window.__BG_VER__ = "1.8.0-fork.1";
     }
 
     var lowBoxR = $('lowNum');
-    if (lowBoxR && pendingConf.THRESHOLD_OFF === undefined) lowBoxR.value = num(vconf.THRESHOLD_OFF, 75);
+    if (lowBoxR && pendingConf.THRESHOLD_OFF === undefined) setVal('lowNum', num(vconf.THRESHOLD_OFF, 75));
     if (lowBoxR) { lowBoxR.disabled = !en; $('lowMinus').disabled = !en; $('lowPlus').disabled = !en; }
     $('thNum').disabled = !en;
     $('thMinus').disabled = !en;
@@ -417,8 +428,8 @@ window.__BG_VER__ = "1.8.0-fork.1";
       /* 开关的 checked 统一由 render() 按乐观值同步，这里只刷数字框，避免两处写打架 */
       var vconf = {}; for (var k in conf) vconf[k] = conf[k];
       for (var pk in pendingConf) vconf[pk] = pendingConf[pk];
-      $('thNum').value = num(vconf.THRESHOLD_ON, 80);
-      $('pollNum').value = num(vconf.CHECK_INTERVAL, 30);
+      setVal('thNum', num(vconf.THRESHOLD_ON, 80));
+      setVal('pollNum', num(vconf.CHECK_INTERVAL, 30));
       render();
     });
   }
@@ -701,8 +712,7 @@ window.__BG_VER__ = "1.8.0-fork.1";
       var on = parseInt((pendingConf.THRESHOLD_ON || conf.THRESHOLD_ON || numBox.value), 10) || 80;
       var mine = on - 5;
       if (mine < 5) mine = 5;
-      v = Math.round((parseInt(v, 10) || mine) / 5) * 5;
-      if (v > mine) v = mine;
+      v = Math.max(5, Math.min(mine, parseInt(v, 10) || mine));
       if (v < 5) v = 5;
       lowBox.value = v;
       pendingConf.THRESHOLD_OFF = String(v);
