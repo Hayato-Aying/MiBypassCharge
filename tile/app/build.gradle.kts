@@ -2,8 +2,11 @@ plugins {
     id("com.android.application")
 }
 
-// 无界面伴生 APK：只有一个 TileService，复用模块的 bg-ctl.sh 状态机。
+// 控制中心磁贴 APK：MainActivity 是 WebUI 的宿主（桌面图标、磁贴长按都进它），
+// TileService 是磁贴本身，复用模块的 bg-ctl.sh 状态机。
 // 没有 androidx、没有 Kotlin stdlib，dex 只有几 KB。
+// 版本号不在这里写死：build-app.sh 用 module/module.prop 的 version/versionCode
+// 覆盖（下面的 1 / "1.0" 只在直接跑 Gradle 时才生效）。
 android {
     namespace = "com.changxyz.mibypasscharge.tile"
     compileSdk = 34

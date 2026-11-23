@@ -11,8 +11,9 @@
 #   log [n]           日志尾部
 #   restart           重启守护
 #
-# v1.7.2：去掉独立的"手动充电"模式（force_off）。用户关掉旁路总开关就等价于
-#        手动充电，没必要多一个模式；按钮改成"手动旁路 ↔ 恢复自动"两态。
+# v1.8.0-fork.1：force_off 是正式状态，不是"废弃的手动充电模式"。
+#        「按阈值自动」关掉、「现在恢复充电」都落到它；守护在充满后交回 auto。
+#        flip 支持 on / off / cancel，无参数的旧形式保留给已装的旧磁贴。
 
 MODDIR=${MODDIR:-$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)}
 . "$MODDIR/bin/bg-lib.sh"

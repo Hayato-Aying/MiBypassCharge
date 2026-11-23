@@ -6,6 +6,8 @@
 ## 1. 这不是官方软件
 
 本项目是一个**第三方实验性 KernelSU 模块**，由个人开发者基于真机实测与系统公开接口编写。
+它是 [ChangXYZ-CPU/MiBypassCharge](https://github.com/ChangXYZ-CPU/MiBypassCharge)
+的个人 fork，**不是上游官方发布**；上游与小米、KernelSU 均未对本 fork 背书。
 它与小米 / Redmi、MIUI / HyperOS、KernelSU 及任何设备厂商**没有任何隶属、授权或背书关系**。
 项目中出现的厂商名称、系统服务名、文件名仅用于说明技术实现，不代表获得许可。
 
@@ -35,12 +37,13 @@ echo 0   > /sys/class/qcom-battery/smart_chg
 - 获取 root、安装 KernelSU、刷入任何模块都可能**失去保修**、触发安全检测（如银行类 App），
   甚至造成**数据丢失或设备变砖**。
 - 请务必在刷入前**完整备份**重要数据。
-- 请只从可信来源获取本项目的安装包，并核对发布页给出的 MD5。
+- 请只从可信来源获取本项目的安装包，并核对发布页给出的 SHA-256。
 - 使用"禁用"而非"卸载"模块时，`uninstall.sh` 不会运行，停充位可能保持到下次重启。
 
 ## 4. 兼容范围极窄
 
-本项目**只在 Redmi K70（`vermeer` / SM8550）、HyperOS 2.0.205 上实测过**。
+本项目**只在 Redmi K70（`23113RKC6C` / `vermeer` / SM8550）、
+`OS4.0.3.0.XNKCNXM`（Android 17，内核 5.15.194）、KernelSU 上实测过**。
 
 `smart_chg` 是小米/红米部分机型存在的充电保护位，K70 外的机型可能也有同样的接口
 **但是不一定可以稳定使用**。满足以下条件的设备**理论上可能可用，尝试可能存在风险**：

@@ -1,38 +1,53 @@
-MiBypassCharge — 旁路供电守护 (K70)
+MiBypassCharge — 旁路供电
 版本: v1.8.0-fork.1（基于上游 v1.8.0）
 
 插电后充到「充到多少停」就停充，手机改由适配器直供（电池 0W），
 掉到「用到多少才充」再恢复充电。停充走小米官方 smart_chg 位，
 与安全中心「导航断充保护」同款，驱动自保持，拔插不丢。
 
-开关层级：
-  旁路供电      —— 总开关，关掉就是完全正常充电
-  ├ 按阈值自动  —— 充到「充到多少停」就停充，掉到「用到多少才充」再补
-  └ 立即旁充    —— 当场停充不补电，临时叠在按阈值自动之上
+入口：
+  · 桌面「旁路供电」图标
+  · KernelSU → 模块 → MiBypassCharge → 打开
+  · 控制中心磁贴「旁路充电」（装了磁贴 App 才有）
 
-点法（总开关已开启）：
-  · 按阈值自动：点一下开，再点一下关（关 = 正常充电）。
-  · 没到停止值时点「立即旁充」= 当场停充；
-    之后点「恢复正常」= 退回按阈值自动继续跑，不是正常充电。
-  · 已经充到停止值（此时本来就已停充，等价于旁充中）点「恢复正常」
-    = 立即旁充和按阈值自动两个都关掉，之后一直正常充，
-      充满也不会自己把按阈值自动开回来。
+界面：
+  旁路供电      总开关。关掉 = 完全正常充电，守护进程全停，零常驻。
+  充到多少停    40–100%，默认 80。点 ±5 或直接输入。
+  用到多少才充  5 …（停充点 − 5），默认 75。点 ±5 或直接输入。
+  巡检间隔      5–120 秒，默认 30。
+  立即旁充      当场停充，不补电；再点「恢复正常充电」= 真·正常充电。
+  按阈值自动    充到停充点停、掉到恢复点再充；再点一下 = 关掉（正常充电）。
+  控制中心磁贴  安装 / 打开磁贴 App。
+  运行日志      最近日志。
 
-KernelSU 模块，纯脚本 + WebUI，不安装任何 App。
-适配 Redmi K70（vermeer / HyperOS 2 / Android 15）；其他机型未测试。
+判据只看电池电流：充电为正、放电为负，|I| < 120 mA 才算停充成功。
+滞回：≥ 停充点就停，≤ 恢复点才继续充，中间保持现状。
 
-开源地址: https://github.com/ChangXYZ-CPU/MiBypassCharge
+实测：Redmi K70（vermeer / OS4.0.3.0.XNKCNXM / Android 17 / KernelSU）。
+仅此一台，其他机型、其他 ROM 未测试。
+
+仓库: https://github.com/1918554837/MiBypassCharge
+上游: https://github.com/ChangXYZ-CPU/MiBypassCharge
 使用说明 / 更新日志 / 免责声明见仓库 README.md 与 DISCLAIMER.md。
 
 修改系统充电行为有风险，请自行承担。安装前请备份数据。
 
-控制中心磁贴（可选）:
-  模块目录 webroot/MiBypassChargeTile.apk 是一个 17KB 的无界面伴生 App，
-  只有一个 TileService，不占后台、不常驻。在 WebUI 点「安装」后，
-  进控制中心 → 编辑 → 把「旁路供电」拖出来。
-  磁贴主行直接显示当前结论：旁路充电开启 / 旁路充电关闭；
-  副标题补充来源（立即旁充 / 阈值 80% 已停 / 正常充电 / 按阈值自动）。
-  点一下 = 立即旁充，再点一下 = 恢复正常充电
-  （等价于 bg-ctl.sh flip on / flip cancel）。
-  阈值自动停在设定值时，磁贴也会显示「旁路充电开启」，和 App 里按钮同步。
+控制中心磁贴（可选，刷入时自动安装）:
+  module/webroot/MiBypassChargeTile.apk 约 45 KB。
+  它是 WebUI 的宿主（桌面图标、磁贴长按都进它），同时提供 TileService。
+  不常驻、无通知；root 侧 bg-tile-keep.sh 每 20 秒把它钉在
+  oom_score_adj 为 -900 并解冻，避免 HyperOS freezer 冻住磁贴点了没反应。
+  装不上时 APK 会留在 /sdcard/Download/MiBypassChargeTile.apk，
+  手动点一次安装，或等开机后 service.sh 自动重试。
+
+  用法：控制中心 → 编辑 → 把「旁路充电」拖出来。
+  点一下 = 立即旁充；再点一下 = 恢复正常充电（flip on / flip cancel）。
+  磁贴主行只写功能名，状态看高亮色和副标题（来源：立即旁充 /
+  阈值 80% 已停 / 正常充电 / 按阈值自动）。
   首次点击会弹一次 root 授权（KernelSU per-app 持久，之后不再弹）。
+
+命令行（M=/data/adb/modules/MiBypassCharge）:
+  sh $M/bin/bg-ctl.sh status
+  sh $M/bin/bg-ctl.sh flip on | off | cancel
+  sh $M/bin/bg-ctl.sh auto
+  sh $M/bin/bg-ctl.sh set THRESHOLD_ON 80

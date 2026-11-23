@@ -23,18 +23,20 @@ if os.path.exists(_idx):
     if _new != _txt:
         open(_idx, 'w', encoding='utf-8').write(_new)
         print('WebUI 版本 ->', ver.lstrip('v'))
-README = """MiBypassCharge — 旁路供电守护 (K70)
+README = """MiBypassCharge — 旁路供电
 版本: %s
 
 插电后充到设定电量就停充，手机改由适配器直供（电池 0W），
-低于恢复点再继续充。停充走小米官方 smart_chg 位，
+掉到恢复点再继续充。停充走小米官方 smart_chg 位，
 与安全中心「导航断充保护」同款，驱动自保持，拔插不丢。
 
-KernelSU 模块，纯脚本 + WebUI，不安装任何 App。
-适配 Redmi K70（vermeer / HyperOS 2 / Android 15）；其他机型未测试。
+KernelSU 模块，root 脚本 + WebUI。另带一个可选的控制中心磁贴 App
+（约 45 KB，刷入时自动安装；被系统拦下会留到 /sdcard/Download，
+开机后会再试一次）。桌面「旁路供电」图标或 KernelSU 模块卡片进入界面。
 
-开源地址: https://github.com/ChangXYZ-CPU/MiBypassCharge
-使用说明 / 更新日志 / 免责声明见仓库 README.md 与 DISCLAIMER.md。
+实测：Redmi K70（vermeer / OS4.0.3.0.XNKCNXM / Android 17），仅此一台。
+仓库: https://github.com/1918554837/MiBypassCharge
+上游: https://github.com/ChangXYZ-CPU/MiBypassCharge
 
 修改系统充电行为有风险，请自行承担。安装前请备份数据。
 """ % ver

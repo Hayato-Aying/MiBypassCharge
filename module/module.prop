@@ -3,4 +3,4 @@ name=MiBypassCharge
 version=v1.8.0-fork.1
 versionCode=10801
 author=Hayato
-description=旁路供电：插电后充到设定电量即停充，手机改由适配器直供（电池 0W）；掉到设定下限再恢复充电。停充走小米官方 smart_chg 位，与安全中心「导航断充保护」同款。纯脚本 + WebUI；控制中心磁贴为可选伴生 APK，不常驻。
+description=旁路供电：插电后充到设定电量即停充，手机改由适配器直供（电池 0W）；掉到设定下限再恢复充电。停充走小米官方 smart_chg 位，与安全中心「导航断充保护」同款。root 脚本 + WebUI；另带可选的控制中心磁贴 APK（刷入时自动安装，不常驻）。实测 Redmi K70 / Android 17。

@@ -1,106 +1,73 @@
-# Release notes · v1.8.0
+# Release notes · v1.8.0-fork.1
 
-> 本文件供打 Release 时复制。发布包：`MiBypassCharge-v1.8.0.zip`
-> MD5：`5928961ca3c96efe586190118ac9b50c`（33,955 字节）
-> 历史版本与完整根因分析见 `变更说明.md`；仓库 Release 页有各版更新说明。
+> 本文件供打 Release 时复制。发布包：`MiBypassCharge-v1.8.0-fork.1.zip`
+> 大小 `87616` 字节，SHA-256 `febe09d7bb702fad197135333627dd214f23b44604973b25e7aaa56a9d49dce3`
+> 磁贴 APK：`MiBypassChargeTile-v1.8.0-fork.1.apk`，`46,174` 字节，
+> SHA-256 `900affa091aa8cd342df2f641e0d267ee98903be509436b2c49129436f589017`
+> 上游改动史见 `变更说明.md`（历史档，里面的路径仍是旧的 `bypass_guard`）。
 
-## ⚠️⚠️ 升级必读：模块 ID 已变更，必须先卸载旧版
+这是 [ChangXYZ-CPU/MiBypassCharge](https://github.com/ChangXYZ-CPU/MiBypassCharge)
+v1.8.0 的个人 fork，只在自己一台 Redmi K70 上验证，**不是上游官方发布**。
 
-本版本的**模块 ID 从 `bypass_guard` 改为 `MiBypassCharge`**（模块名同步改为
-`MiBypassCharge`）。KernelSU 以 ID 作为模块的唯一标识，**旧版和新版会被识别成两个
-完全不同的模块**。
+## 实测环境
 
-**直接覆盖安装会导致两个模块同时存在、同时拉起守护，互相冲突。**
-
-正确升级步骤：
-
-1. **先卸载旧模块**：KernelSU → 模块 → 找到「旁路供电守护 (K70)」(`bypass_guard`)
-   → 卸载。卸载脚本会自动复位 `smart_chg`、恢复充电，**不会删除你的配置**
-   （配置在 `/data/adb/bypass_guard/`，与新模块共用，设置会保留）。
-2. **重启一次**（让旧守护进程彻底退出）。
-3. **再安装本版本** `MiBypassCharge-v1.8.0.zip`。
-4. 再重启，进 WebUI 确认状态正常。
-
-> 如果你是从 `MiBypassCharge` 的旧版本升级（已经是新 ID），则可以直接覆盖，无需卸载。
-
-**配置会自动迁移**：新版数据目录为 `/data/adb/MiBypassCharge`。首次运行时会检测
-旧目录 `/data/adb/bypass_guard`，若新目录没有配置而旧目录有，会自动复制过去
-（`config.conf` / `state` / `bp_on` / `bypass.log`），阈值等设置不会丢。
-
-## 支持情况
-
-| 项目 | 状态 |
+| 项目 | 值 |
 |---|---|
-| Root 方案 | **仅 KernelSU v3.x**（实测 v3.2.5 / 32525）。WebUI 依赖 `window.ksu`，**不支持 Magisk、APatch** |
-| 机型 | **已在 Redmi K70**（`23113RKC6C` / `vermeer` / SM8550）实测。其他机型见下方"可能兼容" |
-| 系统 | HyperOS 2（实测 `2.0.205.0.VNKCNXM`，Android 15） |
-| 停充节点 | `/sys/class/qcom-battery/smart_chg`（需 `persist.vendor.smartchg` 含 bit1） |
-| 附加 App | 无。纯脚本 + WebUI，不安装任何 App |
+| 机型 | Redmi K70（`23113RKC6C` / `vermeer` / SM8550） |
+| 系统 | `OS4.0.3.0.XNKCNXM`，Android 17，内核 5.15.194 |
+| Root | KernelSU（WebUI 依赖 `window.ksu`，不支持 Magisk / APatch） |
+| 停充节点 | `/sys/class/qcom-battery/smart_chg`，`persist.vendor.smartchg=6`（含 bit1） |
 
-### 可能的兼容设备（未测试，不保障安全）
+## 与上游 v1.8.0 的差别
 
-`smart_chg` 在 K70 之后的小米 / 红米高通机型上大概率也普遍存在，
-满足以下条件的设备**理论上可能可用**：
-
-- KernelSU v3.x
-- 高通平台，`/sys/class/qcom-battery/smart_chg` 存在且可写
-- `getprop persist.vendor.smartchg` 含 `bit1`（支持导航断充）
-- HyperOS / MIUI 且系统自带「导航断充保护」
-
-自检：`ls -l /sys/class/qcom-battery/smart_chg` 和 `getprop persist.vendor.smartchg`。
-
-> **作者本人只有一台 K70，没有其他设备可以测试。**
-> "可能兼容"只是基于接口存在性的推断，未经验证，**不能保障安全性或兼容性**。
-> 在其他机型上使用风险自负，详见仓库 `DISCLAIMER.md`。
+- **附带控制中心磁贴 App**（`tile/`，约 45 KB）：`MainActivity` 是 WebUI 的宿主
+  （桌面图标、磁贴长按都进它），`TileService` 是磁贴。刷入时 `customize.sh` 自动装，
+  被系统拦下就留到 `/sdcard/Download/`，开机后 `service.sh` 再试一次
+- **磁贴防冻结**：HyperOS 的 freezer 会把没绑前台的磁贴冻成 `do_freezer_trap`，
+  表现为「点了没反应」。root 侧 `bg-tile-keep.sh` 每 20 秒把 `oom_score_adj` 钉到
+  `-900` 并解冻已冻进程；守护每 5 轮检查是否被杀，被杀就补起
+- **磁贴读状态不再起 su**：守护把状态副本写进 App 私有目录（`/data/adb` 是 0700，
+  App 读不到），磁贴读文件 0 ms 出状态
+- **`force_off` 恢复为正式状态**：上游 v1.7.2 那条 `force_off → auto` 的迁移删掉了，
+  否则磁贴「关」之后 auto 到阈值又会继续停充，用户看到的就是「关不掉」；
+  现在充满后由守护交回 `auto`
+- **`flip` 明确带方向**：`flip on` / `flip off` / `flip cancel`，无参数的旧形式保留给
+  已安装的旧磁贴（按 MODE 翻转）。WebUI 和磁贴都不再让后台猜意图
+- **写节点加重试**：`smart_clear` 两次写都加了重试，`flock` 抢不到锁不再静默
+- **插拔监听固定常开**：界面上的开关取消，`WATCH` 恒为 1。`logcat -b events` 只收
+  `battery_status` 一个 tag，约 0.23% 单核；关掉反而让「按阈值自动 + 刚插上」
+  最多等一个巡检周期才停充
+- **阈值输入不再被刷新覆盖**：3 秒状态刷新会跳过有焦点的输入框
+  （以前手动输「用到多少才充」，一松手就被改回旧值）
+- **版本号唯一来源 `module/module.prop`**：WebUI 底部、安装横幅、日志都从它读，
+  不再出现「升了级日志还写 v1.7.2」
 
 ## 功能
 
-- 插电后充到设定电量（默认 85%）自动停充，手机改由适配器直供，电池 0 W
-- 低于恢复点（默认停充点 −5）自动恢复充电
-- WebUI 可调：总开关、停充阈值、插拔即时响应开关、巡检间隔
-- 停充走小米官方 `smart_chg` 位（安全中心「导航断充保护」同款），驱动自保持，拔插不丢
-- 状态判定只看电池电流，不看滞后的 `status` 字段
+- 插电后充到「充到多少停」（默认 80%）停充，手机改由适配器直供，电池 0 W
+- 掉到「用到多少才充」（默认 75%）再恢复充电，中间保持现状（滞回）
+- 停充走小米官方 `smart_chg` 位，与安全中心「导航断充保护」同款，驱动自保持，拔插不丢
+- 状态判定只看电池电流：充电为正、放电为负，`|I| < 120 mA` 才算停充成功
+- WebUI 可调：总开关、两个阈值、巡检间隔（默认 30 秒）；按钮「立即旁充」/「按阈值自动」
+- 总开关关掉 = 守护、看护、监听全停，零常驻
 
-## 本版（v1.8.0）变更
+## 升级 / 安装
 
-- **模块 ID / 名称改为 `MiBypassCharge`**（原 `bypass_guard` / 旁路供电守护 (K70)）
-- **数据目录随之改为 `/data/adb/MiBypassCharge`**，并从旧目录自动迁移配置
-- **修好"关了开关还在后台占资源"**：`WATCH=0` 时若直接改配置再 boot，
-  监听进程不会被清理，会持续唤醒耗电。现在 boot 会按当前配置校正 watch 进程
-- **修好关开关瞬间界面闪一帧**：配置回读存在"写入未落盘、读到旧值"的窗口，
-  会在关停瞬间画出反向状态；现以用户意图值兜底，且 toast 改为等画面绘制完成后再弹
-- **WebUI 顶部改为读取本机真实机型 / SoC**（不再硬编码 K70）
-- 安装横幅重做：去掉易错位的方框，版本号改为从 `module.prop` 动态读取
-- 底部说明与描述支持换行，适配不同屏幕
+如果你之前装的是上游版本，模块 ID 不同（上游是 `bypass_guard`，这里是
+`MiBypassCharge`），KernelSU 会把它们当成两个模块，**先卸载旧模块再装本版**，
+否则两个守护同时跑会互相打架。配置会自动从 `/data/adb/bypass_guard` 复制到
+`/data/adb/MiBypassCharge`。
 
-### v1.7.4 及更早
+```bash
+sh build.sh     # 生成 MiBypassCharge-v1.8.0-fork.1.zip
+```
 
-- 守护状态不再误报"未响应"：开总开关 12 秒宽限期内显示"启动中…"
-- 自动自愈：连续约 9 秒查不到守护时自动 `bg-ctl boot`，20 秒限流
-- 去掉调整充电上限时的 toast（数字框已即时更新，重复提示打断微调）
-
-## 近期修复（v1.7.2）
-
-五个真机反馈问题：① 关总开关彻底停进程省电；② 去掉"手动充电"模式、修好回不到自动；
-③ 开关视觉不同步（滑块动、背景等 toast 才变黑——`background` 走主线程 paint 被 KSU
-同步 exec 冻结，改用 `opacity` 合成层）；④ 插拔监听提示误闪；⑤ watch 进程堆积到 4 个。
-42 项回归全过，详见 `变更说明.md` ## 15–16 节。
-
-## v1.7.1 修复
-
-- 修「插拔即时响应」开关点了会弹回的问题
-- 修旁路中巡检间隔失效（设 60 秒实际每 6 秒醒一次）——实测设 120 秒后 2 分半零日志
-
-## 安装
-
-1. 确认已装 KernelSU 并取得 root
-2. 下载 `MiBypassCharge-v1.8.0.zip`（核对 MD5）
-3. KernelSU → 模块 → 从本地安装 → 选 zip → 重启
-4. 模块卡片点「打开」进入 WebUI
+KernelSU → 模块 → 从本地安装 → 选 zip → 重启。装完桌面会有「旁路供电」图标，
+控制中心编辑里能找到「旁路充电」磁贴。
 
 ## 卸载与救急
 
-正常卸载：KernelSU 模块列表移除，`uninstall.sh` 会两步复位 `smart_chg`。
+KernelSU 里移除模块即可，`uninstall.sh` 走 `0x2 → 等 3 秒 → 0` 两步复位。
 
 **若刷完发现手机不充电**（root 终端执行）：
 
@@ -112,6 +79,24 @@ echo 0   > /sys/class/qcom-battery/smart_chg
 
 仍不行就重启手机（sysfs 不落盘，重启必然复位）。
 
+## 验证情况
+
+只在这台 K70（`OS4.0.3.0.XNKCNXM` / Android 17）上跑过：
+
+| 项目 | 结果 |
+|---|---|
+| 停充 / 恢复（看日志与电池电流） | 通过 |
+| 磁贴点击、长按进 WebUI、状态同步 | 通过 |
+| 阈值手动输入不被刷新覆盖 | 通过 |
+| 版本号显示 `v1.8.0-fork.1 · Redmi K70 · SM8550` | 通过 |
+| `docs/test.sh`（未插电跑） | 38 PASS / 0 FAIL / 4 SKIP |
+
+4 个 SKIP 是需要插着电才能测的项（阈值裁决、重启后重新停充、关/开总开关后的
+充电恢复）。插电补跑那一轮还没做，所以不写「全过」。
+
+上游 v1.7.2 / v1.7.3 那些「42 项全过」是 HyperOS 2 时代的记录，属于上游历史，
+只留在 `变更说明.md` 里，和本 fork 无关。
+
 ## 风险提示
 
 修改系统充电行为，**可能导致设备无法充电**。请备份数据并自行承担风险。
@@ -119,9 +104,9 @@ echo 0   > /sys/class/qcom-battery/smart_chg
 
 ## 致谢
 
-部分工程实践参考了 [bypass-charger](https://github.com/QiZhi-yi/bypass-charger)（v10.3.5）：
-`flock` 串行化写节点（含其记录的驱动死锁事故）、KernelSU 禁用检测、退出复位与 `trap EXIT` 兜底。
-停充通道使用小米系统自带的 `smart_chg` 官方停充位。
+- 上游 [ChangXYZ-CPU/MiBypassCharge](https://github.com/ChangXYZ-CPU/MiBypassCharge)（GPL-3.0）
+- [bypass-charger](https://github.com/QiZhi-yi/bypass-charger)（v10.3.5）：
+  `flock` 串行化写充电节点、退出复位、`trap EXIT` 兜底
 
 ## 许可
 
