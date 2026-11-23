@@ -89,6 +89,11 @@ logi "=== daemon start $MODVER pid=$$ backend=$BACKEND mode=$MODE thr=$THRESHOLD
 # 重启多写一次 smart_chg 没有副作用，比漏停充强得多。
 BP=0; write_bp 0
 
+# 注意：这里不要在复位 BP 之后马上写磁贴副本。
+# 复位只是记账（bp_on 是上辈子留下的假旁路），此刻的真实结论还没算出来，
+# 抢先写就会给磁贴画出一帧 "MODE=force_on 但 BP=0" 的假状态。
+# 副本交给主循环：每轮执行完都刷（见下面的 BOOT_TICKS 判断）。
+
 push_ui "旁路供电守护已启动"
 
 wait_stopped() {
@@ -115,6 +120,12 @@ wait_charging() {
 
 do_on() {
   batt_info
+  # 没插电就别试了：写进去也停不了（本来就没在充），wait_stopped 必然等满 16 秒，
+  # 日志里刷一堆 "smart_set no effect" 把真正的失败淹掉。直接返回 0 = 本轮跳过，
+  # WANT 仍是 1，插上电后下一轮自然就做。
+  if ! on_charger; then
+    return 0
+  fi
   lvl=$(smart_target_level)
   if smart_set "$lvl" && wait_stopped "$VERIFY_ON_TRIES"; then
     BP=1; write_bp 1
@@ -126,9 +137,12 @@ do_on() {
   # 只有"本机根本没有 smart_chg"时才退到 input_suspend。
   # 有 smart_chg 但这次没停住，说明是阈值没到/驱动还在协商，绝不能用断充兜底
   # （断充会让手机转吃电池，UI 上就是"未插电、0W"，v1.2 初版踩过这个坑）。
-  if [ "$FALLBACK" = "1" ] && ! smart_present && [ -w "$INPUT_SUSPEND" ]; then
-    logi "fallback: input_suspend=1 (断充, 非旁路)"
-    echo 1 > "$INPUT_SUSPEND" 2>/dev/null
+  _sus_ok=0
+  if suspend_present && [ "$FALLBACK" = "1" ] && ! smart_present; then
+    _sus_ok=1
+  fi
+  if [ "$_sus_ok" = "1" ]; then
+    suspend_on
     if wait_stopped "$VERIFY_ON_TRIES"; then
       BACKEND=input_suspend
       save_conf
@@ -136,12 +150,15 @@ do_on() {
       push_ui "已断充（兜底，非旁路）· 电量 ${LEVEL}%"
       return 0
     fi
-    echo 0 > "$INPUT_SUSPEND" 2>/dev/null
+    suspend_off
   fi
   return 1
 }
 
 do_off() {
+  # 手动旁路在低电量时用过断充兑底，退出时无条件释放，
+  # 残留会让「插着电却当没插电」，只能重启（v1.2 踩过）。
+  suspend_off
   case "$BACKEND" in
     input_suspend)
       echo 0 > "$INPUT_SUSPEND" 2>/dev/null
@@ -227,6 +244,7 @@ while true; do
   # 踩过的坑：拔电时把 smart_chg 留成「充到 80 停」，插上电后又关掉开关，
   # 结果没有任何地方去清它 —— 手机一直不充电（79% 卡了半天）。
   if [ "$ENABLED" != "1" ] || [ "$MODE" = "force_off" ]; then
+    suspend_off
     if [ "$LAST_SMART" != "off" ]; then
       smart_clear
       LAST_SMART="off"
@@ -234,11 +252,11 @@ while true; do
     fi
   fi
 
-  # force_off 是「一键恢复充电」用的，充满后自动交回 auto，不用用户再管
-  if [ "$MODE" = "force_off" ] && [ "$LEVEL" -ge 100 ] 2>/dev/null; then
-    set_key MODE auto; MODE=auto
-    logi "force_off 已充满 -> 回到 auto"
-  fi
+  # force_off 是终态，别再"贴心"地充满后偷偷改回 auto。
+  # 以前这里 LEVEL>=100 就 set_key MODE auto，结果用户点「恢复正常充电」
+  # （语义 = 立即旁充和按阈值自动都没开）之后，手机一充满，
+  # 按钮就自己亮回「按阈值自动」，而且 100>=停止阈值会立刻再次停充 ——
+  # 用户看到的就是"我没碰它，它自己又开回去了"。要开阈值自动只能由用户点。
 
   # ---- 决策 ----
   if [ "$ENABLED" != "1" ]; then
@@ -309,6 +327,18 @@ while true; do
   fi
 
   save_state
+  # 磁贴状态副本：开机/重启后头 20 轮每轮都刷，之后每 10 轮一次。
+  # 为什么必须每轮：磁贴 App 很可能是 service.sh 在守护起来之后才补装的，
+  # 装上的那一刻它的 files 目录才存在，之前所有 write_tile_state 都被
+  # "[ -d ] || continue" 静默跳过 —— 于是"没打开过 App 的开机首刷"里磁贴永远读不到副本。
+  # 以前只靠"签名变化 + 每 10 轮"，闲置时 10 轮 = 好几分钟，用户等的就是这段时间。
+  # 之后降到每 10 轮，只为让"这数据是不是陈货"可判断，不必一直频繁写盘。
+  if [ "$BOOT_TICKS" -le 20 ] || [ $((TICK % 10)) -eq 0 ]; then write_tile_state; fi
+  # 磁贴保活进程看护：它被系统/管理器清掉后，磁贴又会变回"点了没反应"。
+  # 每 5 轮查一次（一个 pgrep，稳态下几十秒一次，可忽略）。
+  if [ $((TICK % 5)) -eq 0 ] && [ "$ENABLED" = "1" ]; then
+    [ -n "$(tile_keep_pids)" ] || tile_keep_start
+  fi
   next_interval
   nap "$IV"
 done

@@ -1,7 +1,11 @@
+# 构建产物
+tile/build/
+tile/build*/
+tile/app/src/main/assets/
 *.zip
-*.png
-*.jpg
-!docs/screenshots/
-!docs/screenshots/*.jpg
-.DS_Store
-Thumbs.db
+*.apk
+!module/webroot/MiBypassChargeTile.apk
+
+# 签名（自用，别提交私钥）
+*.jks
+*.keystore

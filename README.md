@@ -1,5 +1,26 @@
 # 旁路供电守护（Redmi K70）
 
+> ### 本 fork 的改动（基于上游 v1.8.0）
+>
+> 在上游「纯脚本 + WebUI」的基础上，补了一个**可选的控制中心磁贴 App**，并修掉了磁贴相关的几处硬伤：
+>
+> | 改动 | 说明 |
+> | --- | --- |
+> | 磁贴 App（`tile/`） | 一个极小的 TileService + WebUI 宿主，桌面图标和 QS 磁贴两个入口；不常驻、无常驻通知 |
+> | 磁贴被冻结 → 点击没反应 | HyperOS 的 freezer 会把没绑定前台的磁贴进程冻成 `do_freezer_trap`，点击要么丢、要么拖几十秒才执行。现在由 root 侧 `bg-tile-keep.sh` 每 20 s 把 App 的 `oom_score_adj` 钉到 `-900` 并对已冻进程解冻；App 自己 `onCreate` 也会自钉一次；守护每 5 轮检查保活进程是否被杀，被杀就补起 |
+> | 磁贴状态延迟 | 守护把 `state` 副本写到 App 私有目录（`/data/adb` 是 0700，App 读不到），磁贴读文件 0 ms 出状态，不再每次 fork 一个 `su` |
+> | 「恢复充电」关不掉 | 上游 v1.7.2 的 `force_off → auto` 迁移被删掉：`force_off` 是正式状态，磁贴的「关」就是它，充满后才由守护交回 `auto` |
+> | 并发点两下留下"停充位武装" | `smart_clear` 的两次写节点都加了重试，`flock` 抢锁失败不再静默 |
+> | 插拔即时响应 | 界面上的开关取消，固定常开（`WATCH=1`）：uevent 阻塞读只占约 0.23% 单核，关掉反而会让「阈值自动 + 刚插上」最多等 60 s 才停充 |
+>
+> 构建：
+> ```sh
+> export ANDROID_JAR=$ANDROID_HOME/platforms/android-34/android.jar
+> export D8_JAR=$ANDROID_HOME/build-tools/34.0.0/lib/d8.jar
+> ./build-app.sh      # 出 APK 并塞进 module/webroot/
+> sh build.sh         # 打模块 zip
+> ```
+
 KernelSU 模块：插上充电器后，电池充到设定电量就停止充电，手机由适配器直供（电池 0 W）。
 停充走小米充电驱动的官方位 `smart_chg` —— 和安全中心「导航断充保护」同一条路，
 状态由驱动保持，拔插不丢，不需要周期性重写。

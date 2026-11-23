@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自适应图标背景：蓝色斜向渐变（按参考图取色，左上 #4A78E8 → 右下 #2C55C9）。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0 H108 V108 H0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="18"
+                android:startY="10"
+                android:endX="92"
+                android:endY="100"
+                android:startColor="#FF4A78E8"
+                android:endColor="#FF2C55C9" />
+        </aapt:attr>
+    </path>
+</vector>

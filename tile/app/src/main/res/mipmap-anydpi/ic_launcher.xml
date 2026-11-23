@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API < 26 兜底图：蓝色圆角方底 + 白色旧图形。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path android:pathData="M11,0 H37 A11,11 0 0 1 48,11 V37 A11,11 0 0 1 37,48 H11 A11,11 0 0 1 0,37 V11 A11,11 0 0 1 11,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="8"
+                android:startY="4"
+                android:endX="41"
+                android:endY="45"
+                android:startColor="#FF4A78E8"
+                android:endColor="#FF2C55C9" />
+        </aapt:attr>
+    </path>
+    <group
+        android:scaleX="0.024210"
+        android:scaleY="0.024210"
+        android:translateX="5.0362"
+        android:translateY="6.3043">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M1097.89,376.74 Q1113.81,281.22 1055.13,358.25 L768.57,734.39 Q740.3,771.5 786.93,772.92 L925.47,777.16 Q953.1,778 948.39,805.24 L899.62,1087.11 Q883.86,1178.2 941.94,1106.29 L1253.44,720.58 Q1285,681.5 1234.77,681.5 L1075.43,681.5 Q1047.1,681.5 1051.76,653.55 L1097.89,376.74 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M444.5,352 H731 A38.5,38.5 0 0 1 731,429 H444.5 A38.5,38.5 0 0 1 444.5,352 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M339.5,696 H609 A38.5,38.5 0 0 1 609,773 H339.5 A38.5,38.5 0 0 1 339.5,696 Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M444.5,1043 H731 A38.5,38.5 0 0 1 731,1120 H444.5 A38.5,38.5 0 0 1 444.5,1043 Z" />
+    </group>
+</vector>

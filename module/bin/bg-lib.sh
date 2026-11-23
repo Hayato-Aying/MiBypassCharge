@@ -19,6 +19,14 @@ SYS=${SYSFS_ROOT:-}
 DATA_DIR=${DATA_DIR_OVERRIDE:-/data/adb/MiBypassCharge}
 CONF=$DATA_DIR/config.conf
 STATE=$DATA_DIR/state
+# 磁贴 App 能读到的状态副本。
+# /data/adb 是 0700 root-only，App 根本进不去，所以原来磁贴只能靠起 su 读状态
+# —— 每次拉开控制中心都要 fork 一次 su，慢且依赖 KSU 管理器活着。
+# 这里由守护把同一份 KV 复制到 App 自己的私有目录，磁贴直接读文件，0ms。
+TILE_DIR=/data/data/com.changxyz.mibypasscharge.tile/files
+# 同一份副本再写一份到 App 的外部私有目录：某些内核的 SELinux 策略会拦
+# root 往 /data/data/<pkg> 写，外部目录基本不会被拦，两边都写最稳。
+TILE_DIR_EXT=/storage/emulated/0/Android/data/com.changxyz.mibypasscharge.tile/files
 BPFILE=$DATA_DIR/bp_on
 LOGFILE=$DATA_DIR/bypass.log
 
@@ -54,7 +62,8 @@ WATCH=1
 BACKEND=smartchg
 SMART_MODE=3
 FALLBACK=1
-NOTIFY=0'
+NOTIFY=0
+MANUAL_FROM='
 
 [ -f "$CONF" ] || printf '%s\n' "$DEFAULT_CONF" > "$CONF"
 
@@ -62,24 +71,24 @@ load_conf() {
   . "$CONF" 2>/dev/null
   [ -z "$POLL" ] && POLL=3
   [ -z "$CHECK_INTERVAL" ] && CHECK_INTERVAL=30
-  [ -z "$WATCH" ] && WATCH=1
+  # 插拔监听已固定常开（界面上的开关去掉了）：它靠 uevent 阻塞读，不是轮询，
+  # 代价约 0.23% 单核；换来的是插上/拔掉立刻被发现。关掉它就得靠巡检，
+  # 没插电时巡检是 2×CHECK_INTERVAL，最多能拖 60 秒才停充 —— 不值。
+  WATCH=1
   [ -z "$THRESHOLD_ON" ] && THRESHOLD_ON=80
-  [ -z "$THRESHOLD_OFF" ] && THRESHOLD_OFF=70
+  [ -z "$THRESHOLD_OFF" ] && THRESHOLD_OFF=75
   [ -z "$MODE" ] && MODE=auto
   [ -z "$ENABLED" ] && ENABLED=1
   [ -z "$NOTIFY" ] && NOTIFY=0
+  MANUAL_FROM=${MANUAL_FROM:-}
   [ -z "$BACKEND" ] && BACKEND=smartchg
   [ -z "$SMART_MODE" ] && SMART_MODE=3
   [ -z "$FALLBACK" ] && FALLBACK=1
-  # v1.7.2 迁移：废弃"手动充电"(force_off)，老配置归一到 auto。
-  # 用户关掉旁路总开关就等价于手动充电，不需要单独模式；
-  # 留着它会让"恢复自动"按钮永远回不去（老版本卡死的就是这个）。
-  if [ "$MODE" = "force_off" ]; then
-    MODE=auto
-    _mig=1
-  else
-    _mig=0
-  fi
+  # force_off 重新成为正式状态 —— 磁贴的"关"就是它。
+  # 原来这里有一条 v1.7.2 的迁移，会把 force_off 强行改回 auto；那样磁贴关掉后
+  # 一切回 auto，而 auto 在电量≥阈值时本来就该继续旁路，表现就是"关不掉"。
+  # 迁移已删：force_off = 真·恢复充电，充满后由守护自动交回 auto。
+  _mig=0
   # 老配置缺新字段时补写回去（否则界面读不到、升级后一直用默认值）
   if ! grep -q '^WATCH=' "$CONF" 2>/dev/null || ! grep -q '^CHECK_INTERVAL=' "$CONF" 2>/dev/null || [ "$_mig" = "1" ]; then
     save_conf
@@ -99,6 +108,7 @@ save_conf() {
     echo "SMART_MODE=$SMART_MODE"
     echo "FALLBACK=$FALLBACK"
     echo "NOTIFY=$NOTIFY"
+    echo "MANUAL_FROM=$MANUAL_FROM"
   } > "$CONF"
 }
 
@@ -128,11 +138,14 @@ rd() { cat "$1" 2>/dev/null; }
 # 只认数字（允许前导 -），其它一律当 0。
 # 结果写进全局 _N，不要用 $(chk ...) —— 命令替换本身 fork 一次，就把 read 省下的全吃回去了。
 # 另外必须用 printf：echo "-154000" 在某些 shell 里会被当成选项，吐空串。
+# 注意：临时变量必须用 _cs 这种"专属"名字。以前这里用 _t，而 bg-ctl.sh 的 flip
+# 也用 _t 存目标模式 —— batt_info 一跑就把 _t 改写成电流值，导致
+# [ "$_t" = "force_on" ] 永远不成立，旁路开关静默失效（v1.0 的真·元凶）。
 chk_set() {
   case "$1" in
     ''|-) _N=0 ;;
-    -*) _t=${1#-}
-        case "$_t" in ''|*[!0-9]*) _N=0 ;; *) _N="-$_t" ;; esac ;;
+    -*) _cs=${1#-}
+        case "$_cs" in ''|*[!0-9]*) _N=0 ;; *) _N="-$_cs" ;; esac ;;
     *[!0-9]*) _N=0 ;;
     *) _N=$1 ;;
   esac
@@ -259,9 +272,25 @@ smart_set() {          # $1 = 停充电量
 smart_clear() {        # 实测：只写 0 有时解不掉，必须先 0x2 再 0
   smart_present || return 1
   # 两次写之间要放锁，否则别的进程这三秒全被挡住
-  write_node "$SMART_CHG" 0x2
+  _ok1=0; _ok2=0
+  # write_node 用 flock -n，抢不到锁会"静默失败"（返回非 0 但没人看）。
+  # 以前这里直接忽略返回值，于是并发点两下时可能留下"停充位还武装着"的状态，
+  # 用户看到的就是"点了像没反应 / 关了又在充"。这里重试几次，拿不到锁就明说。
+  _i=0
+  while [ "$_i" -lt 6 ]; do
+    write_node "$SMART_CHG" 0x2 && { _ok1=1; break; }
+    _i=$((_i+1)); sleep 0.2
+  done
   sleep "${CLEAR_GAP:-3}"
-  write_node "$SMART_CHG" 0
+  _i=0
+  while [ "$_i" -lt 6 ]; do
+    write_node "$SMART_CHG" 0 && { _ok2=1; break; }
+    _i=$((_i+1)); sleep 0.2
+  done
+  if [ "$_ok1" != "1" ] || [ "$_ok2" != "1" ]; then
+    logi "warn: smart_clear 写节点失败 (0x2=$_ok1 0=$_ok2) 可能仍处于停充态"
+    return 1
+  fi
   logi "smart_clear done"
   return 0
 }
@@ -278,6 +307,47 @@ smart_target_level() {
   [ "$lv" -lt 20 ] 2>/dev/null && lv=20
   [ "$lv" -gt 100 ] 2>/dev/null && lv=100
   echo "$lv"
+}
+
+suspend_present() { [ -e "$INPUT_SUSPEND" ] && [ -w "$INPUT_SUSPEND" ]; }
+
+suspend_on() {
+  suspend_present || return 1
+  write_node "$INPUT_SUSPEND" 1 || return 1
+  logi "input_suspend=1 (断充兜底)"
+  return 0
+}
+
+suspend_off() {
+  suspend_present || return 0
+  write_node "$INPUT_SUSPEND" 0 2>/dev/null
+  return 0
+}
+
+# 立即旁路：把「停充电量」写成当前电量，驱动立刻停充。
+# 实测（K70 / HyperOS2）：任何电量值都能生效，没有 80% 下限这回事，
+# 所以这里就写当前电量，不做任何钳制。
+bypass_on_now() {
+  _lv=$LEVEL
+  [ -z "$_lv" ] && _lv=80
+  [ "$_lv" -lt 20 ] 2>/dev/null && _lv=20
+  [ "$_lv" -gt 100 ] 2>/dev/null && _lv=100
+  smart_set "$_lv" >/dev/null 2>&1
+  write_bp 1
+  # 同步本进程的记账值：调用方（bg-ctl）随后要用 print_state 写磁贴副本，
+  # 只写文件不改变量的话，副本里会留着上一次的 BP —— 磁贴就会显示成
+  # "总开关已关 / 已恢复正常充电，但磁贴还是旁路开启"。
+  BP=1
+  return 0
+}
+
+# 取消旁路：两条通道都要松，残留会导致「插着电却当没插电」。
+bypass_off_now() {
+  suspend_off
+  smart_clear >/dev/null 2>&1
+  write_bp 0
+  BP=0          # 同上：让调用方写出的状态副本和真实记账一致
+  return 0
 }
 
 read_bp() { if [ -f "$BPFILE" ]; then cat "$BPFILE" 2>/dev/null; else echo 0; fi; }
@@ -321,6 +391,20 @@ save_state() {
   [ "$_sig" = "$STATE_SIG" ] && return 0
   STATE_SIG=$_sig
   print_state ts > "$STATE"
+  write_tile_state
+}
+
+# 给磁贴 App 写状态副本。目录是 App 的私有 files 目录，root 写进去后
+# 644 权限 App 就能直接读；文件不存在/App 没装时静默跳过。
+write_tile_state() {
+  _kv=$(print_state ts)
+  for _d in "$TILE_DIR" "$TILE_DIR_EXT"; do
+    [ -d "$_d" ] || continue
+    echo "$_kv" > "$_d/state" 2>/dev/null || continue
+    chmod 644 "$_d/state" 2>/dev/null
+    restorecon "$_d/state" >/dev/null 2>&1
+  done
+  return 0
 }
 
 notify() {
@@ -336,4 +420,33 @@ push_ui() {
 
 hide_ui() {
   cmd notification cancel mibypasscharge >/dev/null 2>&1
+}
+
+# 磁贴保活：HyperOS 的 freezer 会冻住没有前台也没有常驻服务的 App。
+# 冻住之后控制中心点磁贴的那一下就丢了（或者拖几十秒才执行）——
+# 用户看到的就是「点了没反应，尤其是 App 没在后台的时候」。
+tile_keep_pids() {
+  for p in $(pgrep -f "bg-tile-keep[.]sh" 2>/dev/null); do
+    [ -r "/proc/$p/cmdline" ] || continue
+    case "$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)" in
+      *bg-tile-keep.sh*) echo "$p" ;;
+    esac
+  done
+}
+
+tile_keep_start() {
+  [ -n "$(tile_keep_pids)" ] && return 0
+  setsid sh "$MODDIR/bin/bg-tile-keep.sh" >/dev/null 2>&1 < /dev/null &
+}
+
+tile_keep_stop() {
+  for p in $(tile_keep_pids); do kill "$p" 2>/dev/null; done
+  i=0
+  while [ "$i" -lt 10 ]; do
+    [ -z "$(tile_keep_pids)" ] && break
+    sleep 0.2
+    i=$((i + 1))
+  done
+  for p in $(tile_keep_pids); do kill -9 "$p" 2>/dev/null; done
+  rm -f "$DATA_DIR/tile-keep.pid" 2>/dev/null
 }

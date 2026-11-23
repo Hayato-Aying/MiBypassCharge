@@ -11,7 +11,7 @@
 
   <header class="top">
     <div class="brand">
-      <div class="logo"></div>
+      <div class="logo"><svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><g fill="#FFFFFF" transform="translate(-4.1361,-3.0571) scale(0.020600)"><path d="M1097.89,376.74 Q1113.81,281.22 1055.13,358.25 L768.57,734.39 Q740.3,771.5 786.93,772.92 L925.47,777.16 Q953.1,778 948.39,805.24 L899.62,1087.11 Q883.86,1178.2 941.94,1106.29 L1253.44,720.58 Q1285,681.5 1234.77,681.5 L1075.43,681.5 Q1047.1,681.5 1051.76,653.55 L1097.89,376.74 Z"/><path d="M444.5,352 H731 A38.5,38.5 0 0 1 731,429 H444.5 A38.5,38.5 0 0 1 444.5,352 Z"/><path d="M339.5,696 H609 A38.5,38.5 0 0 1 609,773 H339.5 A38.5,38.5 0 0 1 339.5,696 Z"/><path d="M444.5,1043 H731 A38.5,38.5 0 0 1 731,1120 H444.5 A38.5,38.5 0 0 1 444.5,1043 Z"/></g></svg></div>
       <div>
         <h1>旁路供电</h1>
         <p class="sub" id="deviceInfo">—</p>
@@ -57,7 +57,7 @@
     <div class="row">
       <div class="rowtext">
         <div class="k">旁路供电</div>
-        <div class="d" id="swDesc">开：充到设定电量就停；关：完全不管，正常充电</div>
+        <div class="d" id="swDesc">开：到设定电量停充；关：不干预</div>
       </div>
       <label class="switch">
         <input type="checkbox" id="enabled" checked>
@@ -70,7 +70,7 @@
     <div class="row">
       <div class="rowtext">
         <div class="k">充到多少停</div>
-        <div class="d">插电后充到该电量就停，低于它自动恢复</div>
+        <div class="d">充到该电量就停充</div>
       </div>
       <div class="stepper">
         <button class="step" id="thMinus" type="button">−</button>
@@ -81,10 +81,25 @@
   </section>
 
   <section class="card">
-    <div class="btns">
-      <button class="btn primary" id="btnToggle">立即旁路</button>
+    <div class="row">
+      <div class="rowtext">
+        <div class="k">用到多少才充</div>
+        <div class="d">掉到该电量恢复（至少比停止值低 5%）</div>
+      </div>
+      <div class="stepper">
+        <button class="step" id="lowMinus" type="button">−</button>
+        <b class="thwrap"><input id="lowNum" class="thnum" type="number" min="5" max="95" step="5" value="75" inputmode="numeric"><i>%</i></b>
+        <button class="step" id="lowPlus" type="button">+</button>
+      </div>
     </div>
-    <p class="hint" id="btnHint">点一下 = 立即旁路，再点一下 = 恢复自动。停充/恢复由充电驱动执行，可能延迟几秒。</p>
+  </section>
+
+  <section class="card">
+    <div class="btns">
+      <button class="btn primary" id="btnToggle">立即旁充</button>
+      <button class="btn ghost" id="btnAuto">按阈值自动</button>
+    </div>
+    <p class="hint" id="btnHint"><b>总开关</b>关掉＝全部正常充电。开启后：<br>· <b>按阈值自动</b>：到停止值停、到下限再充；再点＝关闭。<br>· <b>立即旁充</b>：没到停止值时点它＝当场停充；再点「恢复」＝退回按阈值自动。<br>· 已到停止值时点「恢复正常」＝两个都关，一直正常充。</p>
   </section>
 
   <section class="card info">
@@ -95,24 +110,24 @@
   <section class="card">
     <div class="row">
       <div class="rowtext">
-        <div class="k">插拔即时响应</div>
-        <div class="d" id="watchDesc">开：插上就停，多耗约 0.2%/天；关：省电，但要等下一次巡检</div>
-      </div>
-      <label class="switch">
-        <input type="checkbox" id="watchOn" checked>
-        <span class="track"></span>
-      </label>
-    </div>
-    <div class="row" style="margin-top:14px">
-      <div class="rowtext">
         <div class="k">巡检间隔</div>
-        <div class="d">平时多久看一眼电量，越小越灵敏越费电</div>
+        <div class="d">多久查一次电量，越小越灵敏</div>
       </div>
       <div class="stepper">
         <button class="step" id="pollMinus" type="button">−</button>
         <b class="thwrap"><input id="pollNum" class="thnum" type="number" min="5" max="120" step="5" value="30" inputmode="numeric"><i>秒</i></b>
         <button class="step" id="pollPlus" type="button">+</button>
       </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <div class="rowtext">
+        <div class="k">控制中心磁贴</div>
+        <div class="d" id="tileDesc">控制中心一键切换旁路 / 正常充电</div>
+      </div>
+      <button class="mini" id="btnTile">安装</button>
     </div>
   </section>
 
@@ -125,7 +140,7 @@
   </section>
 
   <footer class="foot">
-    <p>基于 Redmi K70（HyperOS 2）开发。<br>停充走小米充电驱动的 smart_chg 官方位，效果以实际电流为准。</p>
+    <p>MiBypassCharge <span id="footVer">v1.0</span> · 旁路供电<br>停充走小米 smart_chg 官方位，数据均为本机实时读取。</p>
   </footer>
 
 </div>
@@ -135,7 +150,7 @@
 
 <script>
 /* 旁路供电 WebUI（单文件，无外链脚本，避免 WebView 缓存旧代码） */
-window.__BG_VER__ = "1.7.2";
+window.__BG_VER__ = "1.0";
 (function () {
   'use strict';
 
@@ -145,7 +160,6 @@ window.__BG_VER__ = "1.7.2";
   var CTL = 'sh ' + MOD + '/bin/bg-ctl.sh';
 
   var state = {}, conf = {}, lastTs = 0, busy = false;
-  var watchGraceUntil = 0;   /* 点开 watch 后的启动宽限期截止时间戳 */
   var daemonGraceUntil = 0;  /* 操作总开关后的守护启动宽限期截止时间戳 */
   var daemonMiss = 0;        /* 连续检测到"该在跑却不在"的次数，用于自动自愈 */
   var lastBootTry = 0;       /* 上次自动拉起的时间戳，做限流 */
@@ -301,15 +315,35 @@ window.__BG_VER__ = "1.7.2";
     $('pillText').textContent = pill;
 
     var mode = lvmode;
-    $('modeText').textContent = { auto: '自动', force_on: '手动旁路' }[mode] || '自动';
+    /* 名字只表示"策略"，另外把"此刻是不是正在停充"说清楚，
+       否则 auto 到阈值停充时，界面看上去像"手动旁路开着"（注意保持） */
+    var modeName = { auto: '按阈值自动', force_on: '立即旁充', force_off: '已关闭' }[mode] || '按阈值自动';
+    if (mode === 'auto' && bp) modeName = '按阈值自动 · 正在停充';
+    $('modeText').textContent = modeName;
     $('chargerText').textContent = plugged ? '已插电' : '未插电';
 
     var btn = $('btnToggle');
+    var btnAuto = $('btnAuto');
     var manual = (mode === 'force_on');
-    btn.textContent = manual ? '恢复自动' : '立即旁路';
-    btn.classList.toggle('primary', !manual);
+    /* auto 到阈值时驱动已经停充：这时候这个按钮必须表示"现在就要充"，
+       否则用户点一下反而落进 force_on，把手动旁路锁死（注意保持） */
+    var autoStopped = (mode === 'auto' && bp);
+    /* 磁贴和这里共用同一套 MODE：
+         force_on  = 手动旁路（一直不充电）
+         force_off = 已关闭（正常充电，不管阈值）
+         auto      = 按阈值自动
+       按钮只做「旁路 / 不旁路」的切换，和磁贴语义完全一致。 */
+    btn.textContent = manual ? '恢复正常充电' : (autoStopped ? '现在恢复充电' : '立即旁充');
+    btn.classList.toggle('primary', !manual && !autoStopped);
     btn.disabled = !plugged || !en;
+    if (btnAuto) {
+      btnAuto.classList.toggle('active', mode === 'auto');
+      btnAuto.disabled = !en;
+    }
 
+    var lowBoxR = $('lowNum');
+    if (lowBoxR && pendingConf.THRESHOLD_OFF === undefined) lowBoxR.value = num(vconf.THRESHOLD_OFF, 75);
+    if (lowBoxR) { lowBoxR.disabled = !en; $('lowMinus').disabled = !en; $('lowPlus').disabled = !en; }
     $('thNum').disabled = !en;
     $('thMinus').disabled = !en;
     $('thPlus').disabled = !en;
@@ -325,8 +359,6 @@ window.__BG_VER__ = "1.7.2";
        注意"未响应"只在确认失败后才显示：开总开关后守护要几百 ms 才起来，
        这段窗口里 DAEMON=0 是正常的，不该立刻报故障（旧版就是这样误报的）。 */
     var dv = $('daemonText');
-    var watchOn = (state.WATCH_RUNNING === '1');
-    var watchCfg = (vconf.WATCH !== '0');
     var daemonGraceLeft = daemonGraceUntil - Date.now();
     if (!en) {
       /* 总开关关闭 = 刻意全停省电，不是故障 */
@@ -347,27 +379,6 @@ window.__BG_VER__ = "1.7.2";
     var enabledWant = enabledIntent !== null ? enabledIntent
                     : (vconf.ENABLED !== undefined ? vconf.ENABLED : '1');
     $('enabled').checked = String(enabledWant) !== '0';
-    $('watchOn').checked = String(vconf.WATCH !== undefined ? vconf.WATCH : '1') !== '0';
-    /* 问题4：刚点开 watch 时它是 setsid 异步启动，status 还没反映出来，
-       旧代码立刻判成"启动失败"橙色警告，几秒后又自己消失（闪一下）。
-       现在：宽限期内显示中性的"启动中…"，确认超时仍没起来才提示失败。 */
-    var graceLeft = watchGraceUntil - Date.now();
-    if (!en) {
-      $('watchDesc').textContent = '已随总开关停止';
-      $('watchDesc').style.color = '';
-    } else if (!watchCfg) {
-      $('watchDesc').textContent = '已关闭：省约 0.2%/天，插拔要等下一次巡检';
-      $('watchDesc').style.color = '';
-    } else if (watchOn) {
-      $('watchDesc').textContent = '运行中：插拔即时响应，多耗约 0.2%/天';
-      $('watchDesc').style.color = '';
-    } else if (graceLeft > 0) {
-      $('watchDesc').textContent = '启动中…';
-      $('watchDesc').style.color = '';
-    } else {
-      $('watchDesc').textContent = '未能启动：可重启守护或重新打开此开关';
-      $('watchDesc').style.color = '#ff9f0a';
-    }
   }
 
   /* ---------------- 拉数据 ---------------- */
@@ -427,25 +438,34 @@ window.__BG_VER__ = "1.7.2";
     if (busy) return;
     var btn = $('btnToggle');
     var wasManual = (state.MODE === 'force_on');
-    var nextManual = !wasManual;
+    /* auto 模式下已经在停充（bp）时，按钮的语义是"现在恢复充电"，
+       点它要落到 force_off，而不是把当前状态升级成手动旁路。 */
+    var autoStopped = (state.MODE === 'auto') && state.BP === '1';
+    var nextManual = autoStopped ? false : !wasManual;
+    function paintToggle(m) {
+      btn.textContent = m ? '恢复正常充电' : (autoStopped ? '现在恢复充电' : '立即旁充');
+      btn.classList.toggle('primary', !m && !autoStopped);
+    }
     /* 立即切视觉，不等命令：写 pendingConf.MODE 让 render 认新值，定时刷新拨不回去 */
-    pendingConf.MODE = nextManual ? 'force_on' : 'auto';
-    btn.textContent = nextManual ? '恢复自动' : '立即旁路';
-    btn.classList.toggle('primary', !nextManual);
+    pendingConf.MODE = nextManual ? 'force_on' : 'force_off';
+    paintToggle(nextManual);
     busy = true;
-    /* 先渲染乐观视觉，再发阻塞命令（nextFrame 让出一帧） */
+    /* 明确告诉后台要开还是要关（flip on / flip off），不再让它按 MODE 猜。
+       以前发的是无参 flip：状态差一拍时会被判成反方向，于是"点一下像没反应"。
+       flip 只写 sysfs + 戳醒守护，几百毫秒返回，不会像 on/auto 那样卡十几秒。 */
     nextFrame(function () {
-      sh(CTL + ' toggle').then(function (r) {
+      /* 开 = flip on；关分两种语义，交给后台按 MANUAL_FROM 精确交接：
+         auto 到阈值停充时按钮是"现在恢复充电"→ off（无条件充）；
+         取消手动旁路 → cancel（原来在按阈值自动就还回去）。 */
+      var act = nextManual ? 'on' : (autoStopped ? 'off' : 'cancel');
+      sh(CTL + ' flip ' + act).then(function (r) {
         var t = (r || '').trim();
         if (/^ERR/.test(t)) {
-          /* 真失败才回滚 */
           delete pendingConf.MODE;
-          btn.textContent = wasManual ? '恢复自动' : '立即旁路';
-          btn.classList.toggle('primary', !wasManual);
+          paintToggle(wasManual);
           toast(t.slice(4) || '操作失败', true);
         } else {
-          /* 校验完成才提示结果（点击瞬间视觉已跟手，这里只补一句确认） */
-          toast(nextManual ? '已开启旁路' : '已恢复自动');
+          toast(nextManual ? '已开启立即旁充' : (autoStopped ? '已恢复正常充电' : '已退回按阈值自动'));
         }
         return refreshState();
       }).then(function () {
@@ -458,9 +478,128 @@ window.__BG_VER__ = "1.7.2";
     });
   }
 
+  /* 「按阈值自动」是个开关：没开就开，已经开着再点一下就关掉。
+     以前这里无条件写 MODE=auto，等于按钮只有"开"没有"关"——
+     用户点了半天也关不掉，正是「按阈值自动关不了了」的原因。 */
+  function doAuto() {
+    if (busy) return;
+    var cur = pendingConf.MODE || state.MODE || conf.MODE || 'auto';
+    var turningOff = (cur === 'auto');
+    busy = true;
+    /* 关掉 = 恢复正常充电（force_off），不是回 auto（auto 到阈值本来就会继续停充） */
+    pendingConf.MODE = turningOff ? 'force_off' : 'auto';
+    render();
+    nextFrame(function () {
+      var cmd = turningOff ? (CTL + ' flip off') : (CTL + ' auto');
+      sh(cmd).then(function (r) {
+        var t = (r || '').trim();
+        if (/^ERR/.test(t)) {
+          delete pendingConf.MODE;
+          toast(t.slice(4) || '操作失败', true);
+        } else {
+          toast(turningOff ? '已关闭按阈值自动 · 正常充电' : '已开启按阈值自动');
+        }
+        return refreshState();
+      }).then(function () { return loadLog(); })
+        .then(function () { delete pendingConf.MODE; busy = false; render(); });
+    });
+  }
+
+  /* ---------------- 控制中心磁贴（伴生 APK）----------------
+     模块只负责提供 APK 并引导；HyperOS/MIUI 禁止静默 pm install 非商店包，
+     所以点「去安装」= 复制 APK 路径到剪贴板 + toast 引导你在文件管理器手动点一下。
+     APK 固定放在 /sdcard/Download/MiBypassChargeTile.apk（只留一份）。 */
+  var TILE_PKG = 'com.changxyz.mibypasscharge.tile';
+  // 模块自带一份 APK 在 webroot 里，优先用它：这样不管 zip 从哪装进来都能装磁贴。
+  // Download 里那份只是给用户手动点的备份。
+  var TILE_APKS = [
+    '/data/adb/modules/MiBypassCharge/webroot/MiBypassChargeTile.apk',
+    '/data/adb/modules_update/MiBypassCharge/webroot/MiBypassChargeTile.apk',
+    '/sdcard/Download/MiBypassChargeTile.apk'
+  ];
+
+  function isAppMode() {
+    var k = window.ksu || window.KernelSU;
+    return !!(k && typeof k.isApp === 'function' && k.isApp());
+  }
+
+  function tilePkgState() {
+    /* 在 App 自己里：磁贴 App 必然已装，这条卡片只剩"怎么添加"的引导，
+       不再提供安装按钮（点了也只会重装自己）。 */
+    if (isAppMode()) {
+      var b0 = $('btnTile'), d0 = $('tileDesc');
+      if (b0) { b0.textContent = '去添加'; b0.disabled = false; }
+      if (d0) d0.textContent = '已安装。控制中心 → 编辑 → 把「旁路充电」拖进来；长按磁贴回到本页。';
+      return Promise.resolve(true);
+    }
+    return sh('pm list packages ' + TILE_PKG).then(function (out) {
+      var on = String(out || '').indexOf('package:' + TILE_PKG) >= 0;
+      var b = $('btnTile'), d = $('tileDesc');
+      if (b) b.textContent = on ? '重装' : '安装';
+      if (d) {
+        d.textContent = on
+          ? '控制中心 → 编辑 → 把「旁路充电」拖进来，之后一键切换'
+          : '点「安装」自动装；被系统拦截时会打开目录让你手点';
+      }
+      return on;
+    });
+  }
+
+  function installTile() {
+    if (isAppMode()) {
+      /* 已经在 App 里了，只能帮你把控制中心编辑页拉出来 */
+      sh('cmd statusbar expand-settings');
+      toast('在控制中心「编辑」里把「旁路充电」拖进来');
+      return;
+    }
+    var b = $('btnTile');
+    if (b) { b.disabled = true; b.textContent = '处理中'; }
+    /* 三级兜底：
+       1) root 静默装（多数机器能成）
+       2) HyperOS 拦 INSTALL_FAILED_USER_RESTRICTED 时，直接拉起系统安装器
+       3) 还不行就打开 Download 目录，用户手点 APK
+       关键：每一步都把真实原因回显，不要假装成功。 */
+    // 把候选路径先放进 /data/local/tmp 再装：SELinux 对 /data/adb 下的文件
+    // 直接喂给 installd 有时会拒，拷一份最稳。
+    var cmd = 'for A in ' + TILE_APKS.join(' ') + '; do ' +
+      '[ -f "$A" ] || continue; ' +
+      'cp -f "$A" /data/local/tmp/mibc_tile.apk 2>/dev/null; ' +
+      'A=/data/local/tmp/mibc_tile.apk; ' +
+      'if pm install -r "$A" 2>&1 | grep -q Success; then echo PM_OK; exit 0; fi; ' +
+      'if am start -a android.intent.action.VIEW -d "file://$A" ' +
+      '-t application/vnd.android.package-archive 2>&1 | grep -q "^Error"; ' +
+      'then echo AM_FAIL; else echo AM_OK; fi; exit 0; ' +
+      'done; echo NOFILE';
+    sh(cmd).then(function (out) {
+      var t = String(out || '');
+      if (t.indexOf('NOFILE') >= 0) {
+        toast('模块里没带磁贴 APK，重刷一次模块', true);
+        return;
+      }
+      if (t.indexOf('PM_OK') >= 0) {
+        toast('磁贴已安装 · 去控制中心「编辑」里添加');
+        return;
+      }
+      if (t.indexOf('AM_OK') >= 0) {
+        toast('已打开系统安装器 · 点「安装」就行');
+        return;
+      }
+      toast('自动安装被系统拦截，已打开 Download，请手点 APK', true);
+      return sh('am start -a android.intent.action.VIEW -d file:///sdcard/Download -t resource/folder 2>&1');
+    }).then(function () {
+      return tilePkgState();
+    }).then(function () {
+      if (b) b.disabled = false;
+    }, function () {
+      if (b) b.disabled = false;
+    });
+  }
+
   function bind() {
     $('btnToggle').addEventListener('click', doToggle);
+    $('btnAuto').addEventListener('click', doAuto);
     $('btnLog').addEventListener('click', loadLog);
+    $('btnTile').addEventListener('click', installTile);
 
     $('enabled').addEventListener('change', function () {
       var v = this.checked ? 1 : 0;
@@ -499,33 +638,6 @@ window.__BG_VER__ = "1.7.2";
       });
     });
 
-    /* 插拔监听开关 */
-    $('watchOn').addEventListener('change', function () {
-      var v = this.checked ? 1 : 0;
-      pendingConf.WATCH = String(v);
-      /* 打开时给一个启动宽限期，避免异步启动期间闪现"启动失败" */
-      if (v === 1) watchGraceUntil = Date.now() + 8000;
-      render();
-      nextFrame(function () {
-        sh(CTL + ' set WATCH ' + v).then(function (r) {
-          var t = (r || '').trim();
-          if (/^ERR/.test(t)) {
-            toast(t.slice(4) || '设置失败', true);
-            delete pendingConf.WATCH;   /* 失败才回滚 */
-            return loadConf();
-          }
-          toast('插拔即时响应已' + (v ? '开启' : '关闭'));
-          /* 成功：先读配置，再以用户目标值兜底覆盖后删 pending，
-             防止 loadConf 读到旧值时开关被拨回（录屏里关掉又弹回蓝的 bug） */
-          return loadConf().then(function () {
-            conf.WATCH = String(v);
-            delete pendingConf.WATCH;
-            render();
-          });
-        }).then(function () { refreshState(); });
-      });
-    });
-
     /* 巡检间隔：−/+ 和数字框，5~120 秒 */
     var pollBox = $('pollNum');
     function applyPoll(v) {
@@ -552,7 +664,11 @@ window.__BG_VER__ = "1.7.2";
     function applyThreshold(v) {
       v = Math.max(40, Math.min(100, parseInt(v, 10) || 80));
       numBox.value = v;               /* 立即跟手 */
-      var off = Math.max(10, v - 5);
+      var lowEl = $('lowNum');
+      var curLow = parseInt((pendingConf.THRESHOLD_OFF || conf.THRESHOLD_OFF || (lowEl && lowEl.value)), 10) || (v - 5);
+      var off = Math.min(curLow, v - 5);
+      if (off < 5) off = 5;
+      if (lowEl) lowEl.value = off;
       pendingConf.THRESHOLD_ON = String(v);
       pendingConf.THRESHOLD_OFF = String(off);
       nextFrame(function () {
@@ -578,6 +694,37 @@ window.__BG_VER__ = "1.7.2";
     numBox.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { this.blur(); applyThreshold(this.value); }
     });
+
+    /* 用到多少才充：独立可调，须比停止阈值低 5% 以上 */
+    var lowBox = $('lowNum');
+    function applyLow(v) {
+      var on = parseInt((pendingConf.THRESHOLD_ON || conf.THRESHOLD_ON || numBox.value), 10) || 80;
+      var mine = on - 5;
+      if (mine < 5) mine = 5;
+      v = Math.round((parseInt(v, 10) || mine) / 5) * 5;
+      if (v > mine) v = mine;
+      if (v < 5) v = 5;
+      lowBox.value = v;
+      pendingConf.THRESHOLD_OFF = String(v);
+      nextFrame(function () {
+        sh(CTL + ' set THRESHOLD_OFF ' + v).then(function (r) {
+          var t = (r || '').trim();
+          if (/^ERR/.test(t)) {
+            delete pendingConf.THRESHOLD_OFF;
+            toast(t.slice(4) || '设置失败', true);
+            return loadConf();
+          }
+          delete pendingConf.THRESHOLD_OFF;
+          return loadConf();
+        });
+      });
+    }
+    $('lowMinus').addEventListener('click', function () { applyLow((parseInt(lowBox.value, 10) || 75) - 5); });
+    $('lowPlus').addEventListener('click', function () { applyLow((parseInt(lowBox.value, 10) || 75) + 5); });
+    lowBox.addEventListener('change', function () { applyLow(this.value); });
+    lowBox.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { this.blur(); applyLow(this.value); }
+    });
   }
 
   /* 读取本机真实机型 / SoC，替代原来的硬编码 K70 · sm8550。
@@ -585,22 +732,47 @@ window.__BG_VER__ = "1.7.2";
   function loadDeviceInfo() {
     var el = $('deviceInfo');
     if (!el) return;
-    sh('echo "$(getprop ro.product.marketname)|$(getprop ro.soc.model)|$(getprop ro.product.model)"').then(function (out) {
+    /* 一行取 6 个属性，空的那个由 JS 依次兜底，不写任何具体机型 */
+    sh('echo "$(getprop ro.product.marketname)|$(getprop ro.product.vendor.marketname)|$(getprop ro.product.model)|$(getprop ro.soc.model)|$(getprop ro.board.platform)|$(getprop ro.product.device)"').then(function (out) {
       if (!out || out === '__NOAPI__' || out === '__EXEC_ERR__') return;
-      var parts = String(out).trim().split('|');
-      var market = (parts[0] || '').trim();
-      var soc = (parts[1] || '').trim();
-      var model = (parts[2] || '').trim();
-      var text = (market || model || '') + (soc ? ' · ' + soc : '');
-      el.textContent = text || '—';
+      var p = String(out).trim().split('|').map(function (x) { return (x || '').trim(); });
+      var name = p[0] || p[1] || p[2] || p[5] || '';
+      var soc = p[3] || p[4] || '';
+      var text = name + (soc ? ' · ' + soc : '');
+      var ver = window.__BG_VER__ || '';
+      el.textContent = (ver ? 'v' + ver + ' · ' : '') + (text || '—');
     });
   }
 
+  /* App 切到后台时停掉 3 秒轮询：每次 refresh 都要起一次 su，
+     后台继续跑纯属白耗电。回到前台由 __bgWake 立刻补一次。 */
+  var refreshTimer = null;
+  function setPolling(on) {
+    if (on && !refreshTimer) {
+      refreshTimer = setInterval(function () { if (!document.hidden) refreshState(); }, 3000);
+    } else if (!on && refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) setPolling(false);
+    else { setPolling(true); refreshState(); }
+  });
+  /* 原生 onResume 会调它：从磁贴长按回来立刻看到最新状态 */
+  window.__bgWake = function () {
+    setPolling(true);
+    refreshState();
+  };
+
   function boot() {
     bind();
+    var fv = document.getElementById('footVer');
+    if (fv) fv.textContent = 'v' + (window.__BG_VER__ || '');
     loadDeviceInfo();
+    tilePkgState();
     loadConf().then(refreshState).then(loadLog);
-    setInterval(refreshState, 3000);
+    setPolling(!document.hidden);
     setInterval(function () { if (!document.hidden) loadLog(); }, 9000);
   }
 

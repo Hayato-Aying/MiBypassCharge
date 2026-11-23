@@ -1,6 +1,6 @@
 id=MiBypassCharge
 name=MiBypassCharge
-version=v1.8.0
-versionCode=25
-author=ChangXYZ
-description=基于小米部分机型导航断充功能实现的旁路供电，具体适配见仓库说明：\nhttps://github.com/ChangXYZ-CPU/MiBypassCharge\n开发基于 Redmi K70（HyperOS 2）
+version=v1.8.0-fork.1
+versionCode=10801
+author=Hayato
+description=v1.0｜旁路供电：插电后充到设定电量即停充，手机改由适配器直供（电池 0W）；掉到设定下限再恢复充电。停充走小米官方 smart_chg 位，与安全中心「导航断充保护」同款。纯脚本 + WebUI；控制中心磁贴为可选伴生 APK，不常驻。

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 兜底底色：蓝色，和图标渐变起始色一致 -->
+    <color name="ic_launcher_background">#FF4A78E8</color>
+</resources>

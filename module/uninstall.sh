@@ -8,11 +8,13 @@ DATA=/data/adb/MiBypassCharge
 
 # 先停 supervisor，否则它 5 秒后又把守护拉起来，复位会被重新写回去
 [ -f "$DATA/supervisor.pid" ] && kill "$(cat "$DATA/supervisor.pid" 2>/dev/null)" 2>/dev/null
+[ -f "$DATA/tile-keep.pid" ] && kill "$(cat "$DATA/tile-keep.pid" 2>/dev/null)" 2>/dev/null
 [ -f "$DATA/daemon.pid" ] && kill "$(cat "$DATA/daemon.pid" 2>/dev/null)" 2>/dev/null
 # 用脚本名匹配，兼容新旧模块目录名（旧 id=bypass_guard / 新 id=MiBypassCharge）
 pkill -f "bg-watch.sh" 2>/dev/null
 pkill -f "bg-supervise.sh" 2>/dev/null
 pkill -f "bg-daemon.sh" 2>/dev/null
+pkill -f "bg-tile-keep.sh" 2>/dev/null
 sleep 2
 
 QB=/sys/class/qcom-battery
