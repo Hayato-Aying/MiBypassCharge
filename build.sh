@@ -35,7 +35,7 @@ KernelSU 模块，root 脚本 + WebUI。另带一个可选的控制中心磁贴 
 开机后会再试一次）。桌面「旁路供电」图标或 KernelSU 模块卡片进入界面。
 
 实测：Redmi K70（vermeer / OS4.0.3.0.XNKCNXM / Android 17），仅此一台。
-仓库: https://github.com/1918554837/MiBypassCharge
+仓库: https://github.com/Hayato-Aying/MiBypassCharge
 上游: https://github.com/ChangXYZ-CPU/MiBypassCharge
 
 修改系统充电行为有风险，请自行承担。安装前请备份数据。

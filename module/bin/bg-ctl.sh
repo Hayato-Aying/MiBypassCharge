@@ -338,8 +338,11 @@ case "$cmd" in
     load_conf
     batt_info
     # 当场执行，不等守护下一轮巡检（下一轮可能是 60 秒后）。
-    # smart_set/smart_clear/write_bp 都只是 sysfs 写，合起来几十毫秒，
-    # 所以这里仍然能在 300ms 内返回，磁贴不会卡。
+    # 注意两边的耗时不对称：开（smart_set + verify）是毫秒级；
+    # 关（smart_clear）必须先写 0x2、等 CLEAR_GAP（默认 3 秒）才写 0，
+    # 抢不到 flock 时两次写各还要重试 6×0.2 秒 —— 关一路 ≥3 秒、最坏约 5.4 秒。
+    # 所以磁贴侧那次 waitFor 的超时必须留到 6 秒以上，否则会出现
+    # "其实已经关了，磁贴却报 su 超时"。
     if [ "$_tm" = "force_on" ]; then
       if on_charger; then
         bypass_on_now

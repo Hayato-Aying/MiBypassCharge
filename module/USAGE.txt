@@ -26,7 +26,7 @@ MiBypassCharge — 旁路供电
 实测：Redmi K70（vermeer / OS4.0.3.0.XNKCNXM / Android 17 / KernelSU）。
 仅此一台，其他机型、其他 ROM 未测试。
 
-仓库: https://github.com/1918554837/MiBypassCharge
+仓库: https://github.com/Hayato-Aying/MiBypassCharge
 上游: https://github.com/ChangXYZ-CPU/MiBypassCharge
 使用说明 / 更新日志 / 免责声明见仓库 README.md 与 DISCLAIMER.md。
 

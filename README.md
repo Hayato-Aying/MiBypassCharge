@@ -11,7 +11,7 @@ KernelSU 模块：插上充电器后，电池充到「充到多少停」就停�
 
 | 项目 | 值 |
 |---|---|
-| 仓库 | <https://github.com/1918554837/MiBypassCharge> |
+| 仓库 | <https://github.com/Hayato-Aying/MiBypassCharge> |
 | 版本 | `v1.8.0-fork.1`（versionCode 10801，基于上游 v1.8.0） |
 | 机型 | Redmi K70（`23113RKC6C` / `vermeer` / SM8550） |
 | 系统 | `OS4.0.3.0.XNKCNXM`，Android 17，内核 5.15.194 |

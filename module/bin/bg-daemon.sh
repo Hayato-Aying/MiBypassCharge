@@ -87,6 +87,16 @@ logi "=== daemon start $MODVER pid=$$ backend=$BACKEND mode=$MODE thr=$THRESHOLD
 # bp_on 只是我们自己的记账，而 smart_chg 是驱动级状态，进程退出时被 on_exit 清掉后，
 # 重启读到的 bp_on=1 就是"假旁路" —— 界面说旁路中，实际 smart_chg=0 在快充。
 # 重启多写一次 smart_chg 没有副作用，比漏停充强得多。
+#
+# 但反向的情况才是致命的：上一任守护被 SIGKILL / LMK 杀掉时 on_exit 根本没跑，
+# 驱动里的停充位还武装着、bp_on 也是 1。这时只清记账不清驱动，就留下
+# "驱动在停充、界面说没旁路"的僵尸态；而电量一旦落在滞回区
+# （THRESHOLD_OFF < 电量 < THRESHOLD_ON），WANT 取 BP=0，do_on/do_off 两支都不进，
+# 手机就一直不充电。所以 bp_on=1 时先松一次驱动再重置记账。
+if [ "$BP" = "1" ]; then
+  logi "startup: 残留 bp_on=1（上个守护可能被强杀）→ 先复位 smart_chg"
+  smart_clear
+fi
 BP=0; write_bp 0
 
 # 注意：这里不要在复位 BP 之后马上写磁贴副本。
@@ -161,7 +171,8 @@ do_off() {
   suspend_off
   case "$BACKEND" in
     input_suspend)
-      echo 0 > "$INPUT_SUSPEND" 2>/dev/null
+      # 走 write_node 而不是裸重定向：所有节点写必须 flock 串行化（见 bg-lib.sh 的事故记录）
+      write_node "$INPUT_SUSPEND" 0
       BACKEND=smartchg; save_conf
       ;;
     *)
