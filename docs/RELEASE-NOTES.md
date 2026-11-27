@@ -1,13 +1,32 @@
-# Release notes · v1.8.0-fork.1
+# Release notes · v1.8.1
 
-> 本文件供打 Release 时复制。发布包：`MiBypassCharge-v1.8.0-fork.1.zip`
-> 大小 `87616` 字节，SHA-256 `febe09d7bb702fad197135333627dd214f23b44604973b25e7aaa56a9d49dce3`
-> 磁贴 APK：`MiBypassChargeTile-v1.8.0-fork.1.apk`，`46,174` 字节，
-> SHA-256 `900affa091aa8cd342df2f641e0d267ee98903be509436b2c49129436f589017`
+> 本文件供打 Release 时复制。发布包：`MiBypassCharge-v1.8.1.zip`
+> 大小 `88337` 字节，SHA-256 `f965c6e2e3a379c8a804a3c80f5de91ccd1c986ab16d4e2f5a97129804688a9f`
+> 磁贴 APK：这次**没有重建**（本机没有 Android SDK），包内仍是 v1.8.0-fork.1 构建的那份
+> （`46,174` 字节，SHA-256 `900affa091aa8cd342df2f641e0d267ee98903be509436b2c49129436f589017`）。
+> 磁贴代码本版没动，功能不受影响；只是 App 里显示的版本号还是旧的，
+> 要让版本号跟着变，得在装了 Android SDK 的机器上跑一次 `build-app.sh`。
 > 上游改动史见 `变更说明.md`（历史档，里面的路径仍是旧的 `bypass_guard`）。
 
 这是 [ChangXYZ-CPU/MiBypassCharge](https://github.com/ChangXYZ-CPU/MiBypassCharge)
 v1.8.0 的个人 fork，只在自己一台 Redmi K70 上验证，**不是上游官方发布**。
+
+## 本版改动（v1.8.1）：5 处审计修复，不改功能
+
+`smart_chg` 的写入参数、阈值、滞回裁决、UI 行为一律没动。逐条说明见 `变更说明.md` 第 17 节。
+
+- **守护被强杀后可能「不充电」**：启动时若发现残留 `bp_on=1`，先 `smart_clear` 复位驱动。
+  `on_exit` 只在自己捕获到信号时才跑，被 SIGKILL / LMK 带走时驱动停充位还武装着，
+  只清记账就会留下「界面说没旁路、手机却不充电」；电量落在滞回区时 `do_on`/`do_off`
+  两支都不进，一直不充
+- **`input_suspend` 兜底写守 flock**：`do_off` 里那处裸重定向改成 `write_node`，
+  不再绕开节点写串行化
+- **`bg-watch` 不再误删自己的锁**：`EXIT` trap 换成 `INT`/`TERM`/`HUP`。
+  管道子 shell 会继承 `EXIT` trap，而 `$$` 在子 shell 里与父进程相同，
+  pid 校验拦不住 —— 子 shell 一结束就删掉了还活着的锁
+- **`flip` 耗时注释按事实改写**：关一路 ≥3 秒、最坏约 5.4 秒（原来写「300ms 内返回」），
+  磁贴侧 6 秒 `waitFor` 余量不到 1 秒
+- **仓库地址**：`README.md` / `build.sh` / `module/USAGE.txt` 里的 `1918554837` 改成 `Hayato-Aying`
 
 ## 实测环境
 
@@ -59,7 +78,7 @@ v1.8.0 的个人 fork，只在自己一台 Redmi K70 上验证，**不是上游�
 `/data/adb/MiBypassCharge`。
 
 ```bash
-sh build.sh     # 生成 MiBypassCharge-v1.8.0-fork.1.zip
+sh build.sh     # 生成 MiBypassCharge-v1.8.1.zip
 ```
 
 KernelSU → 模块 → 从本地安装 → 选 zip → 重启。装完桌面会有「旁路供电」图标，
@@ -81,7 +100,21 @@ echo 0   > /sys/class/qcom-battery/smart_chg
 
 ## 验证情况
 
-只在这台 K70（`OS4.0.3.0.XNKCNXM` / Android 17）上跑过：
+**v1.8.1 没上真机**，只做了静态检查：
+
+| 项目 | 结果 |
+|---|---|
+| `sh -n`（`module/bin/*.sh`、`service.sh`、`uninstall.sh`、`customize.sh`） | 10/10 通过 |
+| `build.sh` 打包（含 CRLF 校验） | 18 文件、88337 字节、exit 0 |
+
+本版两处改动的触发条件都不在普通路径上，要真机确认：
+
+1. 强杀 `bg-daemon.sh` 让 `bg-supervise.sh` 重新拉起，把电量放在滞回区
+   （恢复点 < 电量 < 停充点），应能正常充电，不再停在「界面显示未旁路、电流 0」
+2. 反复插拔若干次后 `pgrep -f bg-watch.sh` 的实例数应恒定（`test.sh` 里算的是 2 个进程：
+   1 主 + 1 管道子 shell）
+
+下面这些结果来自 v1.8.0-fork.1（上一版；代码与本版只差上述 5 处）：
 
 | 项目 | 结果 |
 |---|---|
