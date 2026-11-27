@@ -1,70 +1,76 @@
-# Release notes · v1.8.2
+# MiBypassCharge v1.8.2 发行说明
 
-> 本文件供打 Release 时复制。发布包：`MiBypassCharge-v1.8.2.zip`
-> 大小 `89332` 字节，SHA-256 `fbcf9831377c4329299e25d265e16fe9a38668c74e292eb6ae4377c12b69dffa`
-> （zip 条目带打包时间戳，重新打包哈希会变；上面是 Release 附件那一次的实测值，
-> 字节数固定 `89332`，核验以 Release 页附件为准）
-> 磁贴 APK：这次**没有重建**（本机没有 Android SDK），包内仍是 v1.8.0-fork.1 构建的那份
-> （`46,174` 字节，SHA-256 `900affa091aa8cd342df2f641e0d267ee98903be509436b2c49129436f589017`）。
-> 磁贴代码本版没动，功能不受影响；只是 App 里显示的版本号还是旧的，
-> 要让版本号跟着变，得在装了 Android SDK 的机器上跑一次 `build-app.sh`。
-> 上游改动史见 `变更说明.md`（历史档，里面的路径仍是旧的 `bypass_guard`）。
+这是 [ChangXYZ-CPU/MiBypassCharge](https://github.com/ChangXYZ-CPU/MiBypassCharge) v1.8.0
+的个人 fork，只在自己一台 Redmi K70 上验证，**不是上游官方发布**。
+上游改动史见 `变更说明.md`（历史档，里面的路径仍是旧的 `bypass_guard`）。
 
-这是 [ChangXYZ-CPU/MiBypassCharge](https://github.com/ChangXYZ-CPU/MiBypassCharge)
-v1.8.0 的个人 fork，只在自己一台 Redmi K70 上验证，**不是上游官方发布**。
+## 发布包
 
-## 本版改动（v1.8.2）：新增充电状态通知，纯增量
+| 项目 | 值 |
+|---|---|
+| 模块包 | `MiBypassCharge-v1.8.2.zip` |
+| 字节数 | `89332` |
+| SHA-256 | `fbcf9831377c4329299e25d265e16fe9a38668c74e292eb6ae4377c12b69dffa` |
+
+zip 条目带打包时间戳，重新打包哈希会变。上表是本次 Release 附件那一次的实测值，
+字节数固定 `89332`，核验以 Release 页附件为准。
+
+**磁贴 APK 这次没有重建**（本机没有 Android SDK），包内仍是 v1.8.0-fork.1 构建的那份
+（`46,174` 字节，SHA-256 `900affa091aa8cd342df2f641e0d267ee98903be509436b2c49129436f589017`）。
+磁贴代码本版没动，功能不受影响，只是 App 里显示的版本号还是旧的；要让版本号跟着变，
+得在装了 Android SDK 的机器上跑一次 `build-app.sh`。
+
+## 本版改动：新增充电状态通知，纯增量
 
 停充参数、阈值裁决、滞回逻辑、WebUI、磁贴代码**一行未动**，只在原有
 `notify()` / `push_ui()` 链路上补了 7 条提醒。逐条说明见 `变更说明.md` 第 18 节。
 
 | 触发 | 正文 |
 |---|---|
-| 正常开始充电（非旁路、电流 >300mA） | `开始充电` |
+| 正常开始充电（非旁路、电流 > 300 mA） | `开始充电` |
 | 充满 100% | `已充满` |
 | 按阈值自动：跌到恢复点、旁路解除重充 | `已恢复充电` |
 | 按阈值自动：冲到停充点进旁路 | `已开启旁路电量 80%`（数字取停充阈值） |
 | 旁路中拔了又插 | `正在旁路充电` |
-| 按阈值自动：电量在恢复点~停充点之间 | `阈值充电` |
+| 按阈值自动：电量在恢复点至停充点之间 | `阈值充电` |
 | 按阈值自动：电量已超停充点 | `正在旁路充电` |
 
-**通知默认关着**（`NOTIFY=0`，界面没有开关）。要开：
+通知默认关着（`NOTIFY=0`，界面没有开关），要开：
 
 ```sh
 su -c 'sh /data/adb/modules/MiBypassCharge/bin/bg-ctl.sh set NOTIFY 1'
 ```
 
-去重规则：跳变才发、开机首轮静默、一轮最多一条。所有提醒共用同一个通知
-tag，新的会盖掉旧的，所以不会堆一屏。
-
-## 实测环境
-
-| 项目 | 值 |
-|---|---|
-| 机型 | Redmi K70（`23113RKC6C` / `vermeer` / SM8550） |
-| 系统 | `OS4.0.3.0.XNKCNXM`，Android 17，内核 5.15.194 |
-| Root | KernelSU（WebUI 依赖 `window.ksu`，不支持 Magisk / APatch） |
-| 停充节点 | `/sys/class/qcom-battery/smart_chg`，`persist.vendor.smartchg=6`（含 bit1） |
+去重规则：跳变才发、开机首轮静默、一轮最多一条。所有提醒共用同一个通知 tag，
+新的会盖掉旧的，不会堆一屏。
 
 ## 与上游 v1.8.0 的差别
 
-- **附带控制中心磁贴 App**（`tile/`，约 45 KB）：`MainActivity` 是 WebUI 的宿主
+### 磁贴 App
+
+- **附带控制中心磁贴**（`tile/`，约 45 KB）：`MainActivity` 是 WebUI 的宿主
   （桌面图标、磁贴长按都进它），`TileService` 是磁贴。刷入时 `customize.sh` 自动装，
   被系统拦下就留到 `/sdcard/Download/`，开机后 `service.sh` 再试一次
-- **磁贴防冻结**：HyperOS 的 freezer 会把没绑前台的磁贴冻成 `do_freezer_trap`，
+- **防冻结**：HyperOS 的 freezer 会把没绑前台的磁贴冻成 `do_freezer_trap`，
   表现为「点了没反应」。root 侧 `bg-tile-keep.sh` 每 20 秒把 `oom_score_adj` 钉到
   `-900` 并解冻已冻进程；守护每 5 轮检查是否被杀，被杀就补起
-- **磁贴读状态不再起 su**：守护把状态副本写进 App 私有目录（`/data/adb` 是 0700，
+- **读状态不再起 su**：守护把状态副本写进 App 私有目录（`/data/adb` 是 0700，
   App 读不到），磁贴读文件 0 ms 出状态
+
+### 充电与守护
+
 - **`force_off` 恢复为正式状态**：上游 v1.7.2 那条 `force_off → auto` 的迁移删掉了，
   否则磁贴「关」之后 auto 到阈值又会继续停充，用户看到的就是「关不掉」；
   现在充满后由守护交回 `auto`
 - **`flip` 明确带方向**：`flip on` / `flip off` / `flip cancel`，无参数的旧形式保留给
-  已安装的旧磁贴（按 MODE 翻转）。WebUI 和磁贴都不再让后台猜意图
+  已安装的旧磁贴（按 `MODE` 翻转）。WebUI 和磁贴都不再让后台猜意图
 - **写节点加重试**：`smart_clear` 两次写都加了重试，`flock` 抢不到锁不再静默
 - **插拔监听固定常开**：界面上的开关取消，`WATCH` 恒为 1。`logcat -b events` 只收
   `battery_status` 一个 tag，约 0.23% 单核；关掉反而让「按阈值自动 + 刚插上」
   最多等一个巡检周期才停充
+
+### WebUI
+
 - **阈值输入不再被刷新覆盖**：3 秒状态刷新会跳过有焦点的输入框
   （以前手动输「用到多少才充」，一松手就被改回旧值）
 - **版本号唯一来源 `module/module.prop`**：WebUI 底部、安装横幅、日志都从它读，
@@ -79,21 +85,23 @@ tag，新的会盖掉旧的，所以不会堆一屏。
 - WebUI 可调：总开关、两个阈值、巡检间隔（默认 30 秒）；按钮「立即旁充」/「按阈值自动」
 - 总开关关掉 = 守护、看护、监听全停，零常驻
 
-## 升级 / 安装
+## 安装与升级
 
 如果你之前装的是上游版本，模块 ID 不同（上游是 `bypass_guard`，这里是
 `MiBypassCharge`），KernelSU 会把它们当成两个模块，**先卸载旧模块再装本版**，
 否则两个守护同时跑会互相打架。配置会自动从 `/data/adb/bypass_guard` 复制到
 `/data/adb/MiBypassCharge`。
 
-```bash
-sh build.sh     # 生成 MiBypassCharge-v1.8.2.zip
-```
-
 从 v1.8.1 升上来直接覆盖安装即可，配置不动（`NOTIFY` 仍是原来的值）。
 
 KernelSU → 模块 → 从本地安装 → 选 zip → 重启。装完桌面会有「旁路供电」图标，
 控制中心编辑里能找到「旁路充电」磁贴。
+
+自己打包：
+
+```bash
+sh build.sh     # 生成 MiBypassCharge-v1.8.2.zip
+```
 
 ## 卸载与救急
 
@@ -147,6 +155,15 @@ v1.8.1 那两处修复（强杀守护后的滞回区充电、`bg-watch` 实例�
 
 4 个 SKIP 是需要插着电才能测的项（阈值裁决、重启后重新停充、关/开总开关后的
 充电恢复）。插电补跑那一轮还没做，所以不写「全过」。
+
+## 实测环境
+
+| 项目 | 值 |
+|---|---|
+| 机型 | Redmi K70（`23113RKC6C` / `vermeer` / SM8550） |
+| 系统 | `OS4.0.3.0.XNKCNXM`，Android 17，内核 5.15.194 |
+| Root | KernelSU（WebUI 依赖 `window.ksu`，不支持 Magisk / APatch） |
+| 停充节点 | `/sys/class/qcom-battery/smart_chg`，`persist.vendor.smartchg=6`（含 bit1） |
 
 ## 风险提示
 
