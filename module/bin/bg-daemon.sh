@@ -39,6 +39,18 @@ LAST_EN=$THRESHOLD_ON
 LAST_DI=$THRESHOLD_OFF
 LAST_SMART=""
 LAST_IDLE=""
+# 通知用：记上一轮的「在充电 / 已充满 / 插着电」。
+# 空串 = 还没测过，首轮只初始化不弹（否则每次开机都先弹一条假状态）。
+LAST_CHG=""
+LAST_FULL=""
+LAST_ONCH=""
+# 自动阈值模式下的区间：high=电量已超停充阈值，mid=落在恢复点~停充点之间。
+# 只在区间发生变化时提醒，否则每轮都弹一条会把通知栏刷成滚动条。
+LAST_ZONE=""
+# do_off 已经发过「已恢复充电」时置 1：同一次跳变不要再补一条「开始充电」，
+# 否则通知栏里后一条会把前一条盖掉，用户只看到"开始充电 75%"，反而不知道是
+# 旁路退出了。这个标记在真正开始充电那一轮消费掉。
+OFF_NOTIFIED=0
 BOOT_TICKS=0
 SLEEP_PID=""
 
@@ -140,7 +152,7 @@ do_on() {
   if smart_set "$lvl" && wait_stopped "$VERIFY_ON_TRIES"; then
     BP=1; write_bp 1
     logi "BP ON smartchg level=$lvl now=$LEVEL cur=$CUR"
-    push_ui "已开启旁路 · 电量 ${LEVEL}% · 电池 0.00W"
+    push_ui "已开启旁路电量 ${lvl}%"
     return 0
   fi
   logi "smart_set no effect (cur=$CUR status=$STATUS)"
@@ -191,13 +203,15 @@ do_off() {
 
   if wait_charging "$VERIFY_OFF_TRIES"; then
     logi "BP OFF level=$LEVEL cur=$CUR (charging resumed)"
-    push_ui "已恢复充电 · 电量 ${LEVEL}%"
+    OFF_NOTIFIED=1
+    push_ui "已恢复充电"
   else
     logi "BP OFF but not charging yet (cur=$CUR status=$STATUS) → 再补一次"
     smart_clear
     sleep 4
     batt_info
-    push_ui "已恢复充电 · 电量 ${LEVEL}%"
+    OFF_NOTIFIED=1
+    push_ui "已恢复充电"
   fi
   return 0
 }
@@ -250,6 +264,56 @@ while true; do
   if [ "$THRESHOLD_OFF" -ge "$THRESHOLD_ON" ] 2>/dev/null; then
     THRESHOLD_OFF=$((THRESHOLD_ON - 5))
   fi
+
+  # ---- 通知：只在跳变上发一条，其余轮次闭嘴 ----
+  # push_ui 在 do_on / do_off 里已经覆盖了「开旁路」「恢复充电」，
+  # 主循环这里补的是光靠那两处发不出来的：
+  #   ①插上电本来就在正常充电（没到停充阈值，谁都不用动）
+  #   ②一直充到 100%（全程没有状态翻转）
+  #   ③旁路中拔了又插（BP 一直是 1，不经过 on/off 翻转）
+  #   ④按阈值自动时电量落在两阈值之间 / 已经冲过头
+  # 电流 >300mA（is_charging）才算真在充；旁路停充时电流接近 0，天然为假。
+  _chg=0; is_charging && _chg=1
+  _full=0
+  case "$STATUS" in Full*) _full=1 ;; esac
+  [ "$LEVEL" -ge 100 ] 2>/dev/null && _full=1
+
+  # 区间只看自动阈值模式：high = 已超停充阈值（> ON），
+  # mid = 落在恢复点~停充点之间（OFF <= 电量 < ON）。
+  # 电量正好等于 ON 那一刻归 do_on 的「已开启旁路电量 X%」管，这里不重复报。
+  _zone=""
+  if [ "$ENABLED" = "1" ] && [ "$ONCH" = "1" ]; then
+    case "$MODE" in
+      force_on|force_off) ;;
+      *)
+        if [ "$LEVEL" -gt "$THRESHOLD_ON" ] 2>/dev/null; then
+          _zone="high"
+        elif [ "$LEVEL" -ge "$THRESHOLD_OFF" ] 2>/dev/null && [ "$LEVEL" -lt "$THRESHOLD_ON" ] 2>/dev/null; then
+          _zone="mid"
+        fi
+        ;;
+    esac
+  fi
+
+  if [ "$NOTIFY" = "1" ] && [ -n "$LAST_CHG" ]; then
+    if [ "$_full" = "1" ] && [ "$LAST_FULL" != "1" ] && [ "$ONCH" = "1" ]; then
+      push_ui "已充满"
+    elif [ "$ONCH" = "1" ] && [ "$LAST_ONCH" = "0" ] && [ "$BP" = "1" ]; then
+      push_ui "正在旁路充电"
+    elif [ "$_chg" = "1" ] && [ "$LAST_CHG" = "0" ] && [ "$BP" != "1" ] && [ "$OFF_NOTIFIED" != "1" ]; then
+      push_ui "开始充电"
+    elif [ "$_zone" != "$LAST_ZONE" ]; then
+      case "$_zone" in
+        high) push_ui "正在旁路充电" ;;
+        mid)  push_ui "阈值充电" ;;
+      esac
+    fi
+  fi
+  LAST_ONCH=$ONCH
+  LAST_CHG=$_chg
+  LAST_FULL=$_full
+  LAST_ZONE=$_zone
+  [ "$_chg" = "1" ] && OFF_NOTIFIED=0
 
   # 功能关闭 / 强制充电：必须保证停充位是松开的。
   # 踩过的坑：拔电时把 smart_chg 留成「充到 80 停」，插上电后又关掉开关，

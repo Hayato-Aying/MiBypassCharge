@@ -1,9 +1,9 @@
-# Release notes · v1.8.1
+# Release notes · v1.8.2
 
-> 本文件供打 Release 时复制。发布包：`MiBypassCharge-v1.8.1.zip`
-> 大小 `88337` 字节，SHA-256 `03ddc1c4c4d9f3612d19a6753a86d2584fd21882175d8c5657f9ad6d6d65934c`
+> 本文件供打 Release 时复制。发布包：`MiBypassCharge-v1.8.2.zip`
+> 大小 `89332` 字节，SHA-256 `fbcf9831377c4329299e25d265e16fe9a38668c74e292eb6ae4377c12b69dffa`
 > （zip 条目带打包时间戳，重新打包哈希会变；上面是 Release 附件那一次的实测值，
-> 字节数固定 `88337`，核验以 Release 页附件为准）
+> 字节数固定 `89332`，核验以 Release 页附件为准）
 > 磁贴 APK：这次**没有重建**（本机没有 Android SDK），包内仍是 v1.8.0-fork.1 构建的那份
 > （`46,174` 字节，SHA-256 `900affa091aa8cd342df2f641e0d267ee98903be509436b2c49129436f589017`）。
 > 磁贴代码本版没动，功能不受影响；只是 App 里显示的版本号还是旧的，
@@ -13,22 +13,29 @@
 这是 [ChangXYZ-CPU/MiBypassCharge](https://github.com/ChangXYZ-CPU/MiBypassCharge)
 v1.8.0 的个人 fork，只在自己一台 Redmi K70 上验证，**不是上游官方发布**。
 
-## 本版改动（v1.8.1）：5 处审计修复，不改功能
+## 本版改动（v1.8.2）：新增充电状态通知，纯增量
 
-`smart_chg` 的写入参数、阈值、滞回裁决、UI 行为一律没动。逐条说明见 `变更说明.md` 第 17 节。
+停充参数、阈值裁决、滞回逻辑、WebUI、磁贴代码**一行未动**，只在原有
+`notify()` / `push_ui()` 链路上补了 7 条提醒。逐条说明见 `变更说明.md` 第 18 节。
 
-- **守护被强杀后可能「不充电」**：启动时若发现残留 `bp_on=1`，先 `smart_clear` 复位驱动。
-  `on_exit` 只在自己捕获到信号时才跑，被 SIGKILL / LMK 带走时驱动停充位还武装着，
-  只清记账就会留下「界面说没旁路、手机却不充电」；电量落在滞回区时 `do_on`/`do_off`
-  两支都不进，一直不充
-- **`input_suspend` 兜底写守 flock**：`do_off` 里那处裸重定向改成 `write_node`，
-  不再绕开节点写串行化
-- **`bg-watch` 不再误删自己的锁**：`EXIT` trap 换成 `INT`/`TERM`/`HUP`。
-  管道子 shell 会继承 `EXIT` trap，而 `$$` 在子 shell 里与父进程相同，
-  pid 校验拦不住 —— 子 shell 一结束就删掉了还活着的锁
-- **`flip` 耗时注释按事实改写**：关一路 ≥3 秒、最坏约 5.4 秒（原来写「300ms 内返回」），
-  磁贴侧 6 秒 `waitFor` 余量不到 1 秒
-- **仓库地址**：`README.md` / `build.sh` / `module/USAGE.txt` 里的 `1918554837` 改成 `Hayato-Aying`
+| 触发 | 正文 |
+|---|---|
+| 正常开始充电（非旁路、电流 >300mA） | `开始充电` |
+| 充满 100% | `已充满` |
+| 按阈值自动：跌到恢复点、旁路解除重充 | `已恢复充电` |
+| 按阈值自动：冲到停充点进旁路 | `已开启旁路电量 80%`（数字取停充阈值） |
+| 旁路中拔了又插 | `正在旁路充电` |
+| 按阈值自动：电量在恢复点~停充点之间 | `阈值充电` |
+| 按阈值自动：电量已超停充点 | `正在旁路充电` |
+
+**通知默认关着**（`NOTIFY=0`，界面没有开关）。要开：
+
+```sh
+su -c 'sh /data/adb/modules/MiBypassCharge/bin/bg-ctl.sh set NOTIFY 1'
+```
+
+去重规则：跳变才发、开机首轮静默、一轮最多一条。所有提醒共用同一个通知
+tag，新的会盖掉旧的，所以不会堆一屏。
 
 ## 实测环境
 
@@ -80,8 +87,10 @@ v1.8.0 的个人 fork，只在自己一台 Redmi K70 上验证，**不是上游�
 `/data/adb/MiBypassCharge`。
 
 ```bash
-sh build.sh     # 生成 MiBypassCharge-v1.8.1.zip
+sh build.sh     # 生成 MiBypassCharge-v1.8.2.zip
 ```
+
+从 v1.8.1 升上来直接覆盖安装即可，配置不动（`NOTIFY` 仍是原来的值）。
 
 KernelSU → 模块 → 从本地安装 → 选 zip → 重启。装完桌面会有「旁路供电」图标，
 控制中心编辑里能找到「旁路充电」磁贴。
@@ -102,21 +111,23 @@ echo 0   > /sys/class/qcom-battery/smart_chg
 
 ## 验证情况
 
-**v1.8.1 没上真机**，只做了静态检查：
+**v1.8.2 没上真机**，只做了静态检查与假 sysfs 仿真：
 
 | 项目 | 结果 |
 |---|---|
 | `sh -n`（`module/bin/*.sh`、`service.sh`、`uninstall.sh`、`customize.sh`） | 10/10 通过 |
-| `build.sh` 打包（含 CRLF 校验） | 18 文件、88337 字节、exit 0 |
+| 假 sysfs 跑 `bg-daemon.sh`（auto 阈值循环） | 通知序列 5 条，顺序与预期一致，无重复 |
+| 假 sysfs 跑 `bg-daemon.sh`（force_on 拔插） | 2 条：`已开启旁路电量 60%` → `正在旁路充电` |
+| `build.sh` 打包（含 CRLF 校验） | 18 文件、89332 字节、exit 0 |
 
-本版两处改动的触发条件都不在普通路径上，要真机确认：
+仿真方式是 `SYSFS_ROOT` + `DATA_DIR_OVERRIDE` 指向临时目录，造好
+`power_supply/battery`、`usb`、`qcom-battery` 节点和 `config.conf`，
+用 `busybox sh -x` 跑，再从 trace 里核对 `notification post` 的参数和先后顺序。
 
-1. 强杀 `bg-daemon.sh` 让 `bg-supervise.sh` 重新拉起，把电量放在滞回区
-   （恢复点 < 电量 < 停充点），应能正常充电，不再停在「界面显示未旁路、电流 0」
-2. 反复插拔若干次后 `pgrep -f bg-watch.sh` 的实例数应恒定（`test.sh` 里算的是 2 个进程：
-   1 主 + 1 管道子 shell）
+真机上还需要确认的是**通知的实际长相**（标题、展开后的样子、是否会打断当前操作），
+这部分仿真验证不了。
 
-下面这些结果来自 v1.8.0-fork.1（上一版；代码与本版只差上述 5 处）：
+下面这些结果来自 v1.8.0-fork.1（代码与 v1.8.2 只差 v1.8.1 的 5 处修复 + 本版的通知）：
 
 | 项目 | 结果 |
 |---|---|
@@ -126,11 +137,16 @@ echo 0   > /sys/class/qcom-battery/smart_chg
 | 版本号显示 `v1.8.0-fork.1 · Redmi K70 · SM8550` | 通过 |
 | `docs/test.sh`（未插电跑） | 38 PASS / 0 FAIL / 4 SKIP |
 
+v1.8.1 那两处修复（强杀守护后的滞回区充电、`bg-watch` 实例数）仍未上真机补测，
+步骤见下：
+
+1. 强杀 `bg-daemon.sh` 让 `bg-supervise.sh` 重新拉起，把电量放在滞回区
+   （恢复点 < 电量 < 停充点），应能正常充电，不再停在「界面显示未旁路、电流 0」
+2. 反复插拔若干次后 `pgrep -f bg-watch.sh` 的实例数应恒定（`test.sh` 里算的是 2 个进程：
+   1 主 + 1 管道子 shell）
+
 4 个 SKIP 是需要插着电才能测的项（阈值裁决、重启后重新停充、关/开总开关后的
 充电恢复）。插电补跑那一轮还没做，所以不写「全过」。
-
-上游 v1.7.2 / v1.7.3 那些「42 项全过」是 HyperOS 2 时代的记录，属于上游历史，
-只留在 `变更说明.md` 里，和本 fork 无关。
 
 ## 风险提示
 
