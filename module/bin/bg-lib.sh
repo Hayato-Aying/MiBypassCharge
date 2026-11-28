@@ -407,8 +407,58 @@ write_tile_state() {
   return 0
 }
 
+# 通知改由磁贴 App 自己发：这样通知归 App，带 App 图标，点一下还能直接开面板。
+# 为什么不用 shell 的 `cmd notification post`：那条路发出来的通知归 com.android.shell，
+# 小图标只能是系统那套灰图，而且部分 ROM（实测 Android 16 / HyperOS 3）上会被静默丢弃。
+# App 没装时退回原来那条，行为与旧版一致。
+NOTIFY_PKG=com.changxyz.mibypasscharge.tile
+
+# HyperOS 的 freezer 把 App 冻住时，广播送不进去会被直接丢掉，
+# 所以发通知前顺手解一下冻：cgroup v2 的 freezer 位写 0。
+# 冻结位在 /sys/fs/cgroup/apps/uid_<uid>/pid_<pid> 下，老内核只有一层 uid_<uid>，两处都试。
+notify_thaw() {
+  for p in $(pidof "$NOTIFY_PKG" 2>/dev/null); do
+    [ -d "/proc/$p" ] || continue
+    _hit=0
+    for f in /sys/fs/cgroup/apps/uid_*/pid_"$p"/cgroup.freeze \
+             /sys/fs/cgroup/uid_*/pid_"$p"/cgroup.freeze; do
+      [ -f "$f" ] || continue
+      _hit=1
+      [ "$(cat "$f" 2>/dev/null)" = "1" ] && echo 0 > "$f" 2>/dev/null
+    done
+    # 没有 cgroup 冻结位的机器用 am 兜底（Android 14+ 才有这条命令）
+    [ "$_hit" = "1" ] || am unfreeze "$p" >/dev/null 2>&1
+  done
+}
+
+notify_via_app() {
+  notify_thaw
+  # 点名广播靠不住：App 落进 cached 之后，AMS 照样把它记成 delivered，进程里却一条都执行不到
+  # （实测 HOME 后 30 秒起连发三条全丢，加 --receiver-foreground 也一样）。
+  # 改用 am start-service 显式拉起 App 的 Service 发通知：同样的参数、同样的通知，
+  # 但走的是「显式启动」，root 调用能穿透 HyerOS 的后台限制。
+  # 老版本 APK 还没有这个 Service，报 Error 时退回广播那条老路。
+  case "$(am start-service -n "$NOTIFY_PKG/.NotifyService" -a "$NOTIFY_PKG.NOTIFY" \
+            --es text "$1" 2>&1)" in
+    *Error*)
+      am broadcast --receiver-foreground -n "$NOTIFY_PKG/.NotifyReceiver" -a "$NOTIFY_PKG.NOTIFY" \
+        --es text "$1" >/dev/null 2>&1
+      ;;
+  esac
+}
+
+# App 装没装看包目录，别看 TILE_DIR —— 那个是守护写状态副本的地方，
+# 副本要等第一次写成功才存在，拿它当「App 已安装」会误判成没装。
+tile_installed() {
+  [ -d "/data/data/$NOTIFY_PKG" ] || [ -d "/storage/emulated/0/Android/data/$NOTIFY_PKG" ]
+}
+
 notify() {
   [ "$NOTIFY" = "1" ] || return 0
+  if tile_installed; then
+    notify_via_app "$1"
+    return 0
+  fi
   cmd notification post -S bigtext -t "MiBypassCharge" mibypasscharge "$1" >/dev/null 2>&1
 }
 
@@ -419,6 +469,17 @@ push_ui() {
 }
 
 hide_ui() {
+  # App 那条和旧版 shell 那条都收掉，升级过来的残留也一并清掉
+  if tile_installed; then
+    # 同 notify_via_app：广播在 App 落进 cached 后会被整条丢掉，改走显式启动 Service
+    case "$(am start-service -n "$NOTIFY_PKG/.NotifyService" -a "$NOTIFY_PKG.NOTIFY" \
+              --ez cancel true 2>&1)" in
+      *Error*)
+        am broadcast --receiver-foreground -n "$NOTIFY_PKG/.NotifyReceiver" -a "$NOTIFY_PKG.NOTIFY" \
+          --ez cancel true >/dev/null 2>&1
+        ;;
+    esac
+  fi
   cmd notification cancel mibypasscharge >/dev/null 2>&1
 }
 

@@ -101,7 +101,7 @@ done
 ok "脚本语法全部通过"
 [ "$(dcount)" -eq 1 ] && ok "daemon=1" || bad "daemon 数量=$(dcount)"
 [ "$(scount)" -eq 1 ] && ok "supervise=1" || bad "supervise 数量=$(scount)"
-[ "$(wcount)" -eq 2 ] && ok "watch=2（1 主 + 1 管道子）" || bad "watch 数量=$(wcount)"
+[ "$(wcount)" -eq 1 ] && ok "watch=1" || bad "watch 数量=$(wcount)"
 
 # ============ 1. 守护自愈 ============
 echo "[1] kill daemon → supervise 自动重启"

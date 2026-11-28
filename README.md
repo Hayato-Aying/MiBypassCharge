@@ -28,7 +28,7 @@ KernelSU 模块：插上充电器后，电池充到「充到多少停」就停�
 | 磁贴状态延迟 | 守护把状态副本写进 App 私有目录（`/data/adb` 是 0700，App 读不到），磁贴读文件 0 ms 出状态，不再每次 fork `su` |
 | 「恢复充电」关不掉 | 上游 v1.7.2 那条 `force_off → auto` 的迁移删掉了：`force_off` 是正式状态（磁贴的「关」就是它），充满后才由守护交回 `auto` |
 | 并发点两下留下「停充位武装」 | `smart_clear` 两次写节点都加了重试，`flock` 抢不到锁不再静默 |
-| 插拔即时响应 | 界面上的开关取消，固定常开（`WATCH=1`）：`logcat -b events` 只收 `battery_status` 一个 tag，约 0.23% 单核；关掉反而让「按阈值自动 + 刚插上」最多等一个巡检周期才停充 |
+| 插拔即时响应 | 界面上的开关取消，固定常开（`WATCH=1`）：每 2 秒读一次 `power_supply/*/online`，变化就叫醒守护；关掉反而让「按阈值自动 + 刚插上」最多等一个巡检周期才停充 |
 | 阈值输入被刷新覆盖 | 3 秒状态刷新会把正在输入的「用到多少才充」改回旧值；现在输入框有焦点时跳过回写 |
 
 ## 目录
@@ -42,7 +42,7 @@ module/
   bin/bg-lib.sh            公共函数：内建 read 读电池、flock 写节点、smart_chg 掩码
   bin/bg-daemon.sh         守护主循环：自适应轮询、阈值滞回、退出复位
   bin/bg-supervise.sh      看护：守护退出就重启，活着时零唤醒
-  bin/bg-watch.sh          插拔监听：跟 events buffer 的 battery_status，插拔时叫醒守护
+  bin/bg-watch.sh          插拔监听：轮询 power_supply/*/online，插拔时叫醒守护
   bin/bg-tile-keep.sh      磁贴保活：钉 oom_score_adj、解冻、补起被杀进程
   bin/bg-tile-install.sh   装 / 更新磁贴 APK（被拦就留到 /sdcard/Download）
   bin/bg-ctl.sh            控制接口：status get set boot on auto stop flip toggle log restart hide
@@ -120,9 +120,10 @@ sh $M/bin/bg-ctl.sh set THRESHOLD_ON 80
 |---|---|---|
 | 插电、离阈值 ≤3%（或开机头 30 轮） | 3 s（间隔/10，最小 3 s） | ~0.8% |
 | 已在旁路中 / 插电中段 | 30 s | ~0.08% |
-| 没插电 / 功能关闭 | 60 s | ~0.04% |
+| 没插电 / 功能关闭 | 30 s | ~0.08% |
 
-插拔监听固定常开（`logcat -b events -s battery_status`），另占约 0.23% 单核。
+插拔监听固定常开：每 2 秒读 4 个 `power_supply/*/online`（shell 内建 read，不 fork），
+开销远低于原来常驻的 `logcat`（0.23% 单核）。
 
 ## 测试情况
 

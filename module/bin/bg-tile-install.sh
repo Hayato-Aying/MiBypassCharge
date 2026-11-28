@@ -24,6 +24,34 @@ PKG=com.changxyz.mibypasscharge.tile
 SELF=${0%/*}
 SELF=$(cd "$SELF" 2>/dev/null && pwd)
 
+# 通知权限单独补一遍。Android 13+ 没有 POST_NOTIFICATIONS 的 App，notify() 不报错
+# 但通知会被系统直接丢掉。HyperOS 上还有个坑：`pm install -g` 只把权限标成 granted，
+# UID 级的 POST_NOTIFICATION appops 仍是 ignore，同样会导致通知静默消失；
+# 只有撤一次再授一次才会把 appops 同步成 allow。所以这里先探测再决定要不要动。
+grant_noti() {
+  # 刚 `pm install` 完不要马上授权：HyperOS 上这时 `pm grant` 会静默不生效（实测），
+  # 所以用 dumpsys 校验一次，不成功就等一秒再来，最多 5 轮。
+  _i=0
+  while [ "$_i" -lt 5 ]; do
+    pm grant "$PKG" android.permission.POST_NOTIFICATIONS 2>/dev/null
+    if dumpsys package "$PKG" 2>/dev/null | grep -q "POST_NOTIFICATIONS: granted=true"; then
+      break
+    fi
+    sleep 1
+    _i=$((_i + 1))
+  done
+  # 另一个坑：`pm install -g` 之后 UID 级 POST_NOTIFICATION appops 仍是 ignore，
+  # 这时 notify() 不报错但通知会被系统丢掉；撤一次再授一次才会同步成 allow。
+  case "$(cmd appops get "$PKG" POST_NOTIFICATION 2>/dev/null)" in
+    *"Uid mode: POST_NOTIFICATION: ignore"*)
+      pm revoke "$PKG" android.permission.POST_NOTIFICATIONS 2>/dev/null
+      sleep 1
+      pm grant "$PKG" android.permission.POST_NOTIFICATIONS 2>/dev/null
+      ;;
+  esac
+  return 0
+}
+
 if [ -z "$APK" ] || [ ! -f "$APK" ]; then
   APK=""
   for _c in \
@@ -39,6 +67,7 @@ if [ -z "$APK" ]; then
 fi
 
 if [ "$FORCE" != "1" ] && pm list packages 2>/dev/null | grep -qx "package:$PKG"; then
+  grant_noti
   echo "OK|已经装好了"
   exit 0
 fi
@@ -58,6 +87,7 @@ for _opt in "-r -g --user 0" "-r -g" "-r -g -i com.android.vending" "-r -g -i co
   case "$OUT" in
     *Success*)
       rm -f "$TMP" 2>/dev/null
+      grant_noti
       echo "OK|已安装"
       exit 0
       ;;

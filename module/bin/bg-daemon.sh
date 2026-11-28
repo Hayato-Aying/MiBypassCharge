@@ -7,7 +7,8 @@
 # 省电（v1.5+）：轮询间隔按场景自适应，不再死守 3 秒
 #   旁路中 / 快到阈值 → POLL（3s）   要精确停充、要发现拔线
 #   插着电、离阈值还远 → POLL×5（15s） 电量涨得慢
-#   没插电           → POLL×20（60s） 这时什么都做不了，只需发现"插上了"
+#   没插电           → POLL（30s）   这时什么都做不了，只需发现"插上了"
+#                                      （以前是 POLL×2，配合 watch 轮询后改回 POLL）
 #
 # 唤醒（v1.5+）：WebUI 改配置会发 SIGUSR1，nap 立刻被打断重新裁决，
 # 不用等睡满一个周期。
@@ -47,10 +48,6 @@ LAST_ONCH=""
 # 自动阈值模式下的区间：high=电量已超停充阈值，mid=落在恢复点~停充点之间。
 # 只在区间发生变化时提醒，否则每轮都弹一条会把通知栏刷成滚动条。
 LAST_ZONE=""
-# do_off 已经发过「已恢复充电」时置 1：同一次跳变不要再补一条「开始充电」，
-# 否则通知栏里后一条会把前一条盖掉，用户只看到"开始充电 75%"，反而不知道是
-# 旁路退出了。这个标记在真正开始充电那一轮消费掉。
-OFF_NOTIFIED=0
 BOOT_TICKS=0
 SLEEP_PID=""
 
@@ -152,7 +149,15 @@ do_on() {
   if smart_set "$lvl" && wait_stopped "$VERIFY_ON_TRIES"; then
     BP=1; write_bp 1
     logi "BP ON smartchg level=$lvl now=$LEVEL cur=$CUR"
-    push_ui "已开启旁路电量 ${lvl}%"
+    # 文案看触发原因，不看目标电量：
+    #   电量已超停充阈值（插电时就在阈值之上 / 补电过头）→「正在旁路充电」
+    #   正好涨到阈值那一格（一路从下往上充）→「已开启旁路电量 X%」
+    # lvl 是 smart_target_level 算出的目标值，不是真实电量，别拿它当文案。
+    if [ "$LEVEL" -gt "$THRESHOLD_ON" ] 2>/dev/null; then
+      push_ui "正在旁路充电"
+    else
+      push_ui "已开启旁路电量 ${lvl}%"
+    fi
     return 0
   fi
   logi "smart_set no effect (cur=$CUR status=$STATUS)"
@@ -195,22 +200,20 @@ do_off() {
   BP=0; write_bp 0
 
   # 拔了电就别等它"充上"了（拔着电永远等不到，会白等 20 多秒）
+  # 拔电不弹通知（用户明确要求）：只记日志。
   if ! on_charger; then
     logi "BP OFF (unplugged) level=$LEVEL"
-    push_ui "已拔电，旁路解除"
     return 0
   fi
 
   if wait_charging "$VERIFY_OFF_TRIES"; then
     logi "BP OFF level=$LEVEL cur=$CUR (charging resumed)"
-    OFF_NOTIFIED=1
     push_ui "已恢复充电"
   else
     logi "BP OFF but not charging yet (cur=$CUR status=$STATUS) → 再补一次"
     smart_clear
     sleep 4
     batt_info
-    OFF_NOTIFIED=1
     push_ui "已恢复充电"
   fi
   return 0
@@ -229,9 +232,13 @@ next_interval() {
   [ "$_fast" -lt 3 ] && _fast=3
   # 开机后头 30 轮用快节奏（约 90 秒）：PD 还没协商完，容易误判"没插电"
   if [ "$BOOT_TICKS" -le 30 ]; then IV=$_fast; return; fi
-  # 没插电 / 功能关：两倍巡检周期（反正 watch 会在插拔时叫醒）
+  # 没插电 / 功能关：按巡检周期睡（不再 ×2）
+  # 以前没插电睡 60s，指望 watch 在插拔时把 nap 打断；但这台机 events buffer
+  # 是空的，watch 拿不到 battery_status 事件，60s 就成了「插上电最多等 60s 才反应」。
+  # 现在 watch 退化成 2s 轮询 usb/online，正常情况 2-3s 内就叫醒；
+  # 这里仍按 _p（30s）兜底，万一 watch 死了最坏也只慢 30s。
   if [ "$ENABLED" != "1" ] || [ "$ONCH" != "1" ]; then
-    if [ "$MODE" = "force_on" ]; then IV=$_fast; else IV=$((_p * 2)); fi
+    if [ "$MODE" = "force_on" ]; then IV=$_fast; else IV=$_p; fi
     return
   fi
   if [ "$MODE" != "force_on" ]; then
@@ -268,11 +275,11 @@ while true; do
   # ---- 通知：只在跳变上发一条，其余轮次闭嘴 ----
   # push_ui 在 do_on / do_off 里已经覆盖了「开旁路」「恢复充电」，
   # 主循环这里补的是光靠那两处发不出来的：
-  #   ①插上电本来就在正常充电（没到停充阈值，谁都不用动）
-  #   ②一直充到 100%（全程没有状态翻转）
-  #   ③旁路中拔了又插（BP 一直是 1，不经过 on/off 翻转）
-  #   ④按阈值自动时电量落在两阈值之间 / 已经冲过头
-  # 电流 >300mA（is_charging）才算真在充；旁路停充时电流接近 0，天然为假。
+  #   ①一直充到 100%（全程没有状态翻转）
+  #   ②旁路中拔了又插（BP 一直是 1，不经过 on/off 翻转）
+  #   ③按阈值自动时电量落在两阈值之间 / 已经冲过头
+  # 「正常开始充电」不通知（用户明确要求）。_chg 只用来把 LAST_CHG 从空串
+  # 变成非空 —— 它是「首轮只初始化不弹」的门闩，别拿它当通知条件。
   _chg=0; is_charging && _chg=1
   _full=0
   case "$STATUS" in Full*) _full=1 ;; esac
@@ -300,8 +307,6 @@ while true; do
       push_ui "已充满"
     elif [ "$ONCH" = "1" ] && [ "$LAST_ONCH" = "0" ] && [ "$BP" = "1" ]; then
       push_ui "正在旁路充电"
-    elif [ "$_chg" = "1" ] && [ "$LAST_CHG" = "0" ] && [ "$BP" != "1" ] && [ "$OFF_NOTIFIED" != "1" ]; then
-      push_ui "开始充电"
     elif [ "$_zone" != "$LAST_ZONE" ]; then
       case "$_zone" in
         high) push_ui "正在旁路充电" ;;
@@ -313,7 +318,6 @@ while true; do
   LAST_CHG=$_chg
   LAST_FULL=$_full
   LAST_ZONE=$_zone
-  [ "$_chg" = "1" ] && OFF_NOTIFIED=0
 
   # 功能关闭 / 强制充电：必须保证停充位是松开的。
   # 踩过的坑：拔电时把 smart_chg 留成「充到 80 停」，插上电后又关掉开关，
