@@ -4,6 +4,10 @@
     android:versionCode="10820"
     android:versionName="1.8.2">
 
+    <!-- 充电提醒由本 App 发出（带 App 图标）。Android 13+ 还必须拿到运行时权限，
+         模块安装脚本会用 `pm grant` 直接授予，失败时用户可在系统设置里手动开。 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:allowBackup="false"
         android:hasCode="true"
@@ -44,6 +48,21 @@
                 android:name="android.service.quicksettings.TOGGLEABLE_TILE"
                 android:value="true" />
         </service>
+
+        <!-- 守护进程（root）用显式广播把提醒交给本 App 发：
+             am broadcast 点名 com.changxyz.mibypasscharge.tile/.NotifyReceiver，
+             再用 es 参数带 text 文本。
+             不挂 intent-filter —— 只允许点名调用，避免被任意应用触发。 -->
+        <receiver
+            android:name=".NotifyReceiver"
+            android:exported="true">
+        </receiver>
+
+        <!-- App 落到 cached 之后点名广播会被系统吞掉（记录成 delivered 但不执行），
+             所以守护优先用 am start-service 显式拉起这个 Service 来发通知。 -->
+        <service
+            android:name=".NotifyService"
+            android:exported="true" />
 
     </application>
 </manifest>
